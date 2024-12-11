@@ -9,6 +9,15 @@ interface LogViewerProps {
   onDebugMessage?: (message: string) => void;
 }
 
+const getLogColor = (line: string): string => {
+  const lowerLine = line.toLowerCase();
+  if (lowerLine.includes('debug')) return '#00CED1'; // Cyan for DEBUG
+  if (lowerLine.includes('error')) return '#FF4444'; // Red for ERROR
+  if (lowerLine.includes('warn')) return '#FFD700'; // Yellow for WARN/WARNING
+  if (lowerLine.includes('info')) return '#FFFFFF'; // Bright white for INFO
+  return '#CCCCCC'; // Default color for other lines
+};
+
 export function LogViewer({ logFile, onDebugMessage }: LogViewerProps) {
   const [logLines, setLogLines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +101,15 @@ export function LogViewer({ logFile, onDebugMessage }: LogViewerProps) {
             <Text>No log content available</Text>
           ) : (
             logLines.map((line, index) => (
-              <Text key={index} size="sm" style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+              <Text 
+                key={index} 
+                size="sm" 
+                style={{ 
+                  whiteSpace: 'pre-wrap', 
+                  fontFamily: 'monospace',
+                  color: getLogColor(line)
+                }}
+              >
                 {line}
               </Text>
             ))
