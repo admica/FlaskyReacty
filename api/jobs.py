@@ -92,9 +92,8 @@ def process_job_submission(username, sensor, src_ip, dst_ip, start_time, end_tim
 @jwt_required()
 @rate_limit()
 def submit_job():
-    """Submit a new PCAP job"""
+    """Submit a new location-based PCAP job"""
     try:
-        # Get current user from JWT token
         username = get_jwt_identity()
         logger.debug(f"Processing job submission for user: {username}")
 
@@ -103,7 +102,7 @@ def submit_job():
             return jsonify({"error": "No data provided"}), 400
 
         # Extract required fields
-        sensor = data.get('sensor')
+        location = data.get('location')
         src_ip = data.get('src_ip', '').strip()
         dst_ip = data.get('dst_ip', '').strip()
         start_time = data.get('start_time')
@@ -114,49 +113,97 @@ def submit_job():
 
         # Validate required fields
         errors = []
-        if not sensor:
-            errors.append("Sensor is required")
+        if not location:
+            errors.append("Location is required")
         if not src_ip and not dst_ip:
             errors.append("At least one IP address (source or destination) is required")
-        if not start_time or not end_time:
-            errors.append("Start time and end time are required")
+        if not event_time and (not start_time or not end_time):
+            errors.append("Either event time or both start time and end time are required")
 
         if errors:
             return jsonify({"error": "Validation failed", "messages": errors}), 400
 
-        # Process job submission
-        job_result = process_job_submission(
-            username, sensor, src_ip, dst_ip,
-            start_time, end_time, description,
-            event_time, tz
-        )
+        # Verify location exists and get distinct sensor names
+        sensors = db("""
+            SELECT DISTINCT name, status
+            FROM sensors 
+            WHERE location = %s
+        """, (location,))
 
-        if job_result['error']:
-            return jsonify({"error": job_result['error']}), 400
+        if not sensors:
+            return jsonify({"error": f"No sensors found for location: {location}"}), 400
 
-        # Get the validated values tuple
-        values = job_result['values']
+        # Check sensor states
+        sensor_states = {sensor[0]: sensor[1] for sensor in sensors}
+        offline_sensors = [name for name, status in sensor_states.items() if status == 'Offline']
+        if offline_sensors:
+            logger.warning(f"Some sensors are offline at location {location}: {offline_sensors}")
 
-        # Insert job and get the returned ID
+        # Process time parameters
+        utc_start_time = parse_and_convert_to_utc(start_time, tz)
+        utc_end_time = parse_and_convert_to_utc(end_time, tz)
+        utc_event_time = parse_and_convert_to_utc(event_time, tz) if event_time else None
+
+        # Handle event time logic
+        if utc_event_time:
+            utc_start_time = utc_event_time - timedelta(minutes=EVENT_START_BEFORE)
+            utc_end_time = utc_event_time + timedelta(minutes=EVENT_END_AFTER)
+
+        # Create the job in Submitted state
         job_id = db("""
-            INSERT INTO jobs
-            (username, description, sensor, src_ip, dst_ip, event_time,
-             start_time, end_time, status, tz)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            RETURNING id;
-        """, values)
+            INSERT INTO jobs 
+            (location, description, source_ip, dest_ip, event_time,
+             start_time, end_time, status, submitted_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Submitted', %s)
+            RETURNING id
+        """, (location, description, src_ip, dst_ip, utc_event_time,
+              utc_start_time, utc_end_time, username))
 
         if not job_id:
             return jsonify({"error": "Failed to create job"}), 500
 
-        logger.info(f'{username} Job Submitted id={job_id[0]}')
+        job_id = job_id[0]
+
+        # Create tasks for each sensor
+        for sensor_name in sensor_states.keys():
+            task_id = db("""
+                INSERT INTO tasks 
+                (job_id, sensor, status)
+                VALUES (%s, %s, 'Submitted')
+                RETURNING id
+            """, (job_id, sensor_name))
+
+            if task_id:
+                # Add task to sensor's queue if sensor is online
+                if sensor_states[sensor_name] != 'Offline' and sensor_name in sensor_queues:
+                    # Convert times to epochs for the run_job.py script
+                    start_epoch = int(utc_start_time.timestamp())
+                    end_epoch = int(utc_end_time.timestamp())
+                    
+                    # Queue format: "<job_id>_<task_id>"
+                    task_identifier = f"{job_id}_{task_id[0]}"
+                    sensor_queues[sensor_name].put([
+                        task_identifier, 
+                        start_epoch,
+                        end_epoch,
+                        'pcap',  # Default request type
+                        src_ip or '',
+                        dst_ip or ''
+                    ])
+                    logger.debug(f"Queued task {task_identifier} for sensor {sensor_name}")
+                else:
+                    logger.warning(f"Sensor {sensor_name} is offline or has no queue, task created but not queued")
+
+        logger.info(f'{username} Job Submitted id={job_id}')
         return jsonify({
             "message": "Job submitted successfully",
-            "job_id": job_id[0]
+            "job_id": job_id,
+            "offline_sensors": offline_sensors if offline_sensors else None
         }), 201
 
     except Exception as e:
         logger.error(f'Error submitting job: {e}')
+        logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to submit job"}), 500
 
 @jobs_bp.route('/api/v1/jobs', methods=['POST'])
