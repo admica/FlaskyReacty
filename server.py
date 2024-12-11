@@ -25,7 +25,10 @@ from core import (
 
 # Import blueprints
 from api.auth import auth_bp
-from api.jobs import jobs_bp
+from api.job_jobs import jobs_bp
+from api.job_tasks import tasks_bp
+from api.job_merges import merges_bp
+from api.job_downloads import downloads_bp
 from api.sensors import sensors_bp
 from api.admin import admin_bp
 from api.health import health_bp
@@ -163,6 +166,9 @@ def revoked_token_callback(jwt_header, jwt_payload):
 # Register blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(jobs_bp)
+app.register_blueprint(tasks_bp)
+app.register_blueprint(merges_bp)
+app.register_blueprint(downloads_bp)
 app.register_blueprint(sensors_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(health_bp)
