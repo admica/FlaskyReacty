@@ -14,6 +14,7 @@ interface GlobePoint {
   site: string;
   color: string;
   description?: string;
+  altitude: number;
   connections?: {
     incoming: Array<{ from: string; packets: number }>;
     outgoing: Array<{ to: string; packets: number }>;
@@ -304,7 +305,8 @@ Last Seen: ${formatTimestamp(conn.latest_seen)}`,
             site: loc.site,
             radius: 0.5,
             color: loc.color || '#FFFFFF',  // Use location color or default to white
-            description: loc.description
+            description: loc.description,
+            altitude: loc.color === '#105BD8' ? 0.06 : 0.04  // NASA centers are taller
           };
         });
         console.log('Setting locations:', points);
@@ -485,7 +487,7 @@ Last Seen: ${formatTimestamp(conn.latest_seen)}`,
         pointLat="lat"
         pointLng="lng"
         pointColor={(d: any) => d.color}
-        pointAltitude={0.06}
+        pointAltitude="altitude"
         pointRadius="radius"
         pointResolution={24}
         pointsMerge={false}
