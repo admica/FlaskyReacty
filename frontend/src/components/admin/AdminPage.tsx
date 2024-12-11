@@ -1,5 +1,4 @@
 // PATH: src/components/admin/AdminPage.tsx
-
 import { useEffect, useState, useRef } from 'react';
 import { Container, Grid, Paper, Text, Title, RingProgress, Group, Stack, Table, Button, Card, ActionIcon, ScrollArea, Center, Box, Select } from '@mantine/core';
 import { IconDatabase, IconDeviceFloppy, IconCpu, IconRefresh, IconTrash, IconFileText } from '@tabler/icons-react';
@@ -86,6 +85,7 @@ export function AdminPage() {
   const isFetchingRef = useRef(false);
   const [refreshInterval, setRefreshInterval] = useState<string>('300');
   const [refreshProgress, setRefreshProgress] = useState(100);
+  const [animatedProgress, setAnimatedProgress] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
     // Check if user is admin
@@ -127,6 +127,44 @@ export function AdminPage() {
       clearInterval(refreshTimer);
     };
   }, [refreshInterval]);
+
+  // Add animation effect when storage data changes
+  useEffect(() => {
+    if (storage) {
+      // Reset all progress to 0
+      const initialProgress: { [key: string]: number } = {};
+      Object.keys(storage.storage).forEach(key => {
+        initialProgress[key] = 0;
+      });
+      setAnimatedProgress(initialProgress);
+
+      // Animate to actual values
+      const duration = 1000; // 1 second animation
+      const steps = 20; // Number of steps in animation
+      const interval = duration / steps;
+
+      let step = 0;
+      const timer = setInterval(() => {
+        step++;
+        setAnimatedProgress(prev => {
+          const newProgress: { [key: string]: number } = {};
+          Object.entries(storage.storage).forEach(([key, info]) => {
+            const target = info.percent_used;
+            const current = prev[key] || 0;
+            const increment = target / steps;
+            newProgress[key] = Math.min(current + increment, target);
+          });
+          return newProgress;
+        });
+
+        if (step >= steps) {
+          clearInterval(timer);
+        }
+      }, interval);
+
+      return () => clearInterval(timer);
+    }
+  }, [storage]);
 
   const addDebugMessage = (message: string) => {
     setDebugMessages(prev => {
@@ -397,21 +435,24 @@ export function AdminPage() {
                         {/* Right column - dial */}
                         <Center>
                           <RingProgress
-                            size={120}
-                            thickness={8}
+                            size={112}
+                            thickness={11}
                             roundCaps
-                            sections={[{ value: info.percent_used, color: getStorageColor(info.percent_used) }]}
+                            sections={[{ 
+                              value: animatedProgress[name] || 0, 
+                              color: getStorageColor(info.percent_used) 
+                            }]}
                             label={
                               <Text ta="center" fw={700} size="lg">
-                                {info.percent_used}%
+                                {Math.round(animatedProgress[name] || 0)}%
                               </Text>
                             }
                           />
                         </Center>
                       </Group>
-                      {info.percent_used > 70 && (
+                      {info.percent_used > 75 && (
                         <Text size="xs" c={info.percent_used > 85 ? 'red' : 'yellow'} mt="xs">
-                          {info.percent_used > 85 ? 'Critical' : 'Warning'}: Low space
+                          {info.percent_used > 90 ? 'Critical' : 'Warning'}: Low space
                         </Text>
                       )}
                     </Card>
