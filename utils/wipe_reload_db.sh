@@ -66,6 +66,8 @@ sudo -u postgres psql pcapdb < /opt/pcapserver/sql/locations.sql|cat
 error_check "locations import"
 sudo -u postgres psql pcapdb < /opt/pcapserver/sql/init_4.sql|cat
 error_check "schema import"
+sudo -u postgres psql pcapdb < /opt/pcapserver/sql/init_5.sql|cat
+error_check "schema import"
 echo -e "${NC}"
 
 echo -e "${BLUE}[ COMPLETE ]${NC}"
