@@ -8,10 +8,14 @@ from typing import Dict, Optional, Tuple, Any, Union
 import json
 from core import (
     logger, db, config, parse_and_convert_to_utc, generate_signed_url,
-    EVENT_START_BEFORE, EVENT_END_AFTER, STATUS, RESULTS
+    STATUS, RESULTS
 )
 from api.auth import get_user_role
 from api.sensor_threads import sensor_queues, sensor_threads, Thread, sensor_thread
+
+# Constants for event time calculations
+EVENT_START_BEFORE = 15  # minutes before event time
+EVENT_END_AFTER = 15     # minutes after event time
 
 # Shared paths configuration
 try:

@@ -1,5 +1,5 @@
 // PATH: src/components/network/NetworkGlobe.tsx
-
+// Globe images originally from: https://visibleearth.nasa.gov/
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import Globe from 'react-globe.gl';
 import apiService from '../../services/api';

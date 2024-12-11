@@ -13,12 +13,11 @@ from core import (
 )
 from api.auth import get_user_role, activity_tracking
 from api.sensor_threads import (
-    sensor_queues, sensor_threads, Thread, sensor_thread,
-    EVENT_START_BEFORE, EVENT_END_AFTER
+    sensor_queues, sensor_threads, Thread, sensor_thread
 )
 from .job_utils import (
     process_job_submission, check_job_permissions, format_job_data,
-    PCAP_PATH, IMG_PATH
+    PCAP_PATH, IMG_PATH, EVENT_START_BEFORE, EVENT_END_AFTER
 )
 
 # Blueprint Registration
