@@ -469,7 +469,10 @@ export function AdminPage() {
               </Grid.Col>
               <Grid.Col span={8}>
                 {selectedLog ? (
-                  <LogViewer logFile={selectedLog} />
+                  <LogViewer 
+                    logFile={selectedLog} 
+                    onDebugMessage={addDebugMessage}
+                  />
                 ) : (
                   <Text c="dimmed">Select a log file to view its contents</Text>
                 )}
