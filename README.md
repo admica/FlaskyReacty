@@ -120,23 +120,30 @@ frontend/
 
 ### Backend Setup
 ```bash
+# Start in app base directory
+cd /opt/pcapserver
+
 # Create virtual environment
 python3 -m venv venv_linux
 source venv_linux/bin/activate
 
 # Install dependencies
+pip install --upgrade pip
 pip install -r requirements.txt
 
 # Initialize database
 ./utils/wipe_reload_db.sh -f
 
+# Start backend server
+./server.py
+
 # Start sensor monitor service
-python sensor_monitor.py
+./sensor_monitor.py
 ```
 
 ### Frontend Setup
 ```bash
-cd frontend
+cd /opt/pcapserver/frontend
 npm install
 npm run dev
 ```
@@ -145,12 +152,11 @@ npm run dev
 
 ### Backend Development
 ```bash
-# Run tests
-python api_test.py
-python test_server.py
-
 # Monitor logs
-tail -f logs/sensor_monitor.log
+/opt/pcapserver/utils/logtail.py -f /opt/pcapserver/logs
+
+# Run tests
+cd /opt/pcapserver && ./api_test.py
 ```
 
 ### Frontend Development
