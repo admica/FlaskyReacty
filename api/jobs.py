@@ -169,7 +169,7 @@ def get_jobs():
         filters = request.get_json() or {}
 
         # Build query conditions and parameters
-        conditions = ["1=1"]  # Always true condition to start
+        conditions = ["1=1"] # Always true condition to start
         params = []
 
         if filters.get('username'):
@@ -271,6 +271,184 @@ def get_job(job_id):
         logger.error(f"Error retrieving job details: {e}")
         return jsonify({"error": "Failed to retrieve job details"}), 500
 
+@jobs_bp.route('/api/v2/tasks/<int:task_id>/retry', methods=['POST'])
+@jwt_required()
+@rate_limit()
+def retry_task(task_id):
+    """Retry a failed or aborted task"""
+    try:
+        username = get_jwt_identity()
+
+        # Get task and job details in transaction
+        conn = db_pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT t.sensor, t.status, t.retry_count,
+                           j.id as job_id, j.submitted_by,
+                           j.start_time, j.end_time,
+                           j.source_ip, j.dest_ip, j.status as job_status
+                    FROM tasks t
+                    JOIN jobs j ON t.job_id = j.id
+                    WHERE t.id = %s
+                    FOR UPDATE
+                """, (task_id,))
+                task = cur.fetchone()
+
+                if not task:
+                    return jsonify({"error": "Task not found"}), 404
+
+                # Check permissions
+                if task[4] != username:  # submitted_by
+                    user_role = get_user_role(username)
+                    if user_role != 'admin':
+                        return jsonify({"error": "Permission denied"}), 403
+
+                # Check if task can be retried
+                if task[1] not in ['Failed', 'Aborted']:
+                    return jsonify({
+                        "error": f"Cannot retry task in {task[1]} state"
+                    }), 400
+
+                # Check if job is in final state
+                if task[9] not in ['Running', 'Submitted']:
+                    return jsonify({
+                        "error": f"Cannot retry task - job is in {task[9]} state"
+                    }), 400
+
+                sensor_name = task[0]
+                job_id = task[3]
+                start_time = task[5]
+                end_time = task[6]
+                src_ip = task[7] or ''
+                dst_ip = task[8] or ''
+
+                # Update task status
+                cur.execute("""
+                    UPDATE tasks
+                    SET status = 'Submitted',
+                        retry_count = retry_count + 1,
+                        modified_by = %s,
+                        last_modified = NOW(),
+                        start_time = NULL,
+                        end_time = NULL,
+                        pcap_size = NULL,
+                        temp_path = NULL,
+                        result_message = NULL
+                    WHERE id = %s
+                """, (username, task_id))
+
+                # Check if sensor thread is running
+                if sensor_name not in sensor_queues:
+                    sensor_queues[sensor_name] = Queue()
+                    sensor_threads[sensor_name] = Thread(
+                        target=sensor_thread,
+                        args=(sensor_name,)
+                    )
+                    sensor_threads[sensor_name].start()
+                    logger.info(f"Started new sensor thread for {sensor_name}")
+
+                # Queue task
+                sensor_queues[sensor_name].put((
+                    task_id,
+                    int(start_time.timestamp()),
+                    int(end_time.timestamp()),
+                    'pcap',
+                    src_ip,
+                    dst_ip
+                ))
+
+                conn.commit()
+                logger.info(f"Task {task_id} requeued for sensor {sensor_name}")
+
+                return jsonify({
+                    "message": "Task retry initiated",
+                    "task_id": task_id,
+                    "job_id": job_id,
+                    "sensor": sensor_name
+                }), 200
+
+        except Exception as e:
+            conn.rollback()
+            raise
+        finally:
+            db_pool.putconn(conn)
+
+    except Exception as e:
+        logger.error(f"Error retrying task: {e}")
+        return jsonify({"error": "Failed to retry task"}), 500
+
+@jobs_bp.route('/api/v2/tasks/<int:task_id>/skip', methods=['POST'])
+@jwt_required()
+@rate_limit()
+def skip_task(task_id):
+    """Skip a task that hasn't completed yet"""
+    try:
+        username = get_jwt_identity()
+
+        # Get task details in transaction
+        conn = db_pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT t.status, j.submitted_by, j.status as job_status
+                    FROM tasks t
+                    JOIN jobs j ON t.job_id = j.id
+                    WHERE t.id = %s
+                    FOR UPDATE
+                """, (task_id,))
+                task = cur.fetchone()
+
+                if not task:
+                    return jsonify({"error": "Task not found"}), 404
+
+                # Check permissions
+                if task[1] != username:  # submitted_by
+                    user_role = get_user_role(username)
+                    if user_role != 'admin':
+                        return jsonify({"error": "Permission denied"}), 403
+
+                # Check if task can be skipped
+                if task[0] not in ['Submitted', 'Running']:
+                    return jsonify({
+                        "error": f"Cannot skip task in {task[0]} state"
+                    }), 400
+
+                # Check if job is in a state that allows skipping
+                if task[2] not in ['Running', 'Submitted']:
+                    return jsonify({
+                        "error": f"Cannot skip task - job is in {task[2]} state"
+                    }), 400
+
+                # Update task status
+                cur.execute("""
+                    UPDATE tasks
+                    SET status = 'Skipped',
+                        modified_by = %s,
+                        last_modified = NOW(),
+                        end_time = NOW(),
+                        result_message = 'Task skipped by user'
+                    WHERE id = %s
+                """, (username, task_id))
+
+                conn.commit()
+                logger.info(f"Task {task_id} skipped by {username}")
+
+                return jsonify({
+                    "message": "Task skipped successfully",
+                    "task_id": task_id
+                }), 200
+
+        except Exception as e:
+            conn.rollback()
+            raise
+        finally:
+            db_pool.putconn(conn)
+
+    except Exception as e:
+        logger.error(f"Error skipping task: {e}")
+        return jsonify({"error": "Failed to skip task"}), 500
+
 @jobs_bp.route('/api/v1/jobs/<int:job_id>/cancel', methods=['POST'])
 @jwt_required()
 @rate_limit()
@@ -279,38 +457,74 @@ def cancel_job(job_id):
     try:
         username = get_jwt_identity()
 
-        # Check if job exists and belongs to user
-        job = db("SELECT status, sensor FROM jobs WHERE id = %s AND username = %s",
-                (job_id, username))
+        # Get job info and verify permissions
+        job = db("SELECT status, submitted_by FROM jobs WHERE id = %s", (job_id,))
+        if not job: return jsonify({"error": "Job not found"}), 404
 
-        if not job:
+        # Check permissions
+        if job[0][1] != username: # Users can delete only their own jobs unless they're admins
+            user_role = get_user_role(username)
+            if user_role != 'admin':
+                return jsonify({"error": "Permission denied"}), 403
+
+        # Check if job can be cancelled by checking current state
+        if job[0][0] not in ['Submitted', 'Running']:
+            return jsonify({"error": f"Cannot cancel job in {job[0][0]} state"}), 400
+
+        # Start transaction for job and task updates
+        conn = db_pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                # Update job status
+                cur.execute("""
+                    UPDATE jobs
+                    SET status = 'Aborted',
+                        aborted_by = %s,
+                        last_modified = NOW()
+                    WHERE id = %s
+                """, (username, job_id))
+
+                # Update tasks that aren't in final state
+                cur.execute("""
+                    UPDATE tasks
+                    SET status = 'Aborted',
+                        modified_by = %s,
+                        last_modified = NOW(),
+                        end_time = NOW(),
+                        result_message = 'Task aborted due to job cancellation'
+                    WHERE job_id = %s
+                    AND status NOT IN ('Complete', 'Failed', 'Skipped', 'Aborted')
+                """, (username, job_id))
+
+                # Get affected tasks for logging
+                cur.execute("""
+                    SELECT id, sensor
+                    FROM tasks
+                    WHERE job_id = %s
+                """, (job_id,))
+                tasks = cur.fetchall()
+
+                conn.commit()
+
+                # Log task abortion
+                for task_id, sensor in tasks:
+                    logger.info(f"Task {task_id} for sensor {sensor} aborted due to job {job_id} cancellation")
+
             return jsonify({
-                "error": "Not Found",
-                "message": "Job not found or you don't have permission to cancel it"
-            }), 404
+                "message": "Job cancelled successfully",
+                "job_id": job_id,
+                "tasks_affected": len(tasks)
+            }), 200
 
-        status, sensor = job[0]
-
-        # Check if job can be cancelled
-        if status not in [STATUS['Submitted'], STATUS['Running']]:
-            return jsonify({
-                "error": "Bad Request",
-                "message": f"Cannot cancel job in {status} state"
-            }), 400
-
-        # Update job status to Cancelled
-        db("UPDATE jobs SET status = %s, completed = date_trunc('second', NOW()) WHERE id = %s",
-           (STATUS['Cancelled'], job_id))
-
-        logger.info(f"Job {job_id} cancelled by {username}")
-
-        return jsonify({
-            "message": "Job cancelled successfully",
-            "job_id": job_id
-        }), 200
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error in job cancellation transaction: {e}")
+            return jsonify({"error": "Failed to cancel job"}), 500
+        finally:
+            db_pool.putconn(conn)
 
     except Exception as e:
-        logger.error(f"Error cancelling job {job_id}: {e}")
+        logger.error(f"Error cancelling job: {e}")
         return jsonify({"error": "Failed to cancel job"}), 500
 
 @jobs_bp.route('/api/v1/jobs/<int:job_id>', methods=['DELETE'])
