@@ -95,7 +95,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               variant="light"
               color="red"
               leftSection={<IconLogout size={16} />}
-              onClick={() => apiService.logout()}
+              onClick={() => {
+                apiService.logout();
+              }}
             >
               Logout
             </Button>

@@ -250,13 +250,19 @@ const apiService = {
         }
     },
 
-    logout: async (): Promise<void> => {
+    logout: () => {
+        // Clear all auth-related items from localStorage
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('role');
         localStorage.removeItem('isAdmin');
         localStorage.removeItem('username');
-        localStorage.removeItem('lastActivity');
+        
+        // Clear auth header
+        delete api.defaults.headers.common['Authorization'];
+        
+        // Redirect to login page
+        window.location.href = '/login';
     },
 
     getJobs: async (): Promise<Job[]> => {

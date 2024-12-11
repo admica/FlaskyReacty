@@ -11,7 +11,7 @@ interface LogViewerProps {
 
 const getLogColor = (line: string): string => {
   const lowerLine = line.toLowerCase();
-  if (lowerLine.includes('debug')) return '#00CED1'; // Cyan for DEBUG
+  if (lowerLine.includes('debug')) return '#7FB3D5'; // More blue-ish cyan for DEBUG
   if (lowerLine.includes('error')) return '#FF4444'; // Red for ERROR
   if (lowerLine.includes('warn')) return '#FFD700'; // Yellow for WARN/WARNING
   if (lowerLine.includes('info')) return '#FFFFFF'; // Bright white for INFO
