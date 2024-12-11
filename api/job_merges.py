@@ -130,7 +130,7 @@ def merge_jobs():
 
         # Queue merge job for processing
         # Note: Implementation depends on your merge processing system
-        
+
         return jsonify({
             "message": "Merge job created successfully",
             "merge_job_id": merge_job_id[0]
@@ -147,7 +147,7 @@ def get_merge_status(merge_job_id: int):
     """Get status of a merge job"""
     try:
         username = get_jwt_identity()
-        
+
         # Get merge job details
         merge_job = db("""
             SELECT status, requested_by, result_file, error_message

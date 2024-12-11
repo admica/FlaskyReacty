@@ -178,7 +178,7 @@ def clear_cache():
     try:
         data = request.get_json()
         cache_type = data.get('type')
-        
+
         if not cache_type:
             return jsonify({"error": "Cache type is required"}), 400
 
@@ -204,14 +204,14 @@ def clear_cache():
             pattern = 'sensors:user'
         else:
             return jsonify({"error": f"Unknown cache type: {cache_type}"}), 400
-        
+
         # Delete keys matching the pattern
         keys = redis_client.keys(pattern)
         if keys:
             redis_client.delete(*keys)
             logger.info(f"Cleared cache for pattern: {pattern}, keys cleared: {len(keys)}")
             return jsonify({"message": f"Cache cleared for {cache_type}", "keys_cleared": len(keys)}), 200
-        
+
         return jsonify({"message": f"No keys found for {cache_type}"}), 200
 
     except Exception as e:
@@ -226,7 +226,7 @@ def refresh_cache():
     try:
         data = request.get_json()
         cache_type = data.get('type')
-        
+
         if not cache_type:
             return jsonify({"error": "Cache type is required"}), 400
 
@@ -284,7 +284,7 @@ def get_cache_metrics():
                 'hit_rate': info.get('keyspace_hits', 0) / (info.get('keyspace_hits', 0) + info.get('keyspace_misses', 1)) * 100
             }
         }
-        
+
         return jsonify(metrics), 200
 
     except Exception as e:

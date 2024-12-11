@@ -96,7 +96,7 @@ def download_pcap(job_id: int):
     """Generate download URL for PCAP file"""
     try:
         username = get_jwt_identity()
-        
+
         # Check permissions
         has_permission, error_msg, status_code = check_job_permissions(job_id, username)
         if not has_permission:

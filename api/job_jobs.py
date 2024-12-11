@@ -232,7 +232,7 @@ def cancel_job(job_id):
 
         # Get job info
         job = db("SELECT status FROM jobs WHERE id = %s", (job_id,))
-        
+
         # Check if job can be cancelled
         if job[0][0] not in ['Submitted', 'Running']:
             return jsonify({"error": f"Cannot cancel job in {job[0][0]} state"}), 400
@@ -300,7 +300,7 @@ def delete_job(job_id):
     """Delete a completed job"""
     try:
         current_user = get_jwt_identity()
-        
+
         # Check permissions
         has_permission, error_msg, status_code = check_job_permissions(job_id, current_user)
         if not has_permission:

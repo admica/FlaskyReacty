@@ -49,7 +49,7 @@ def process_job_submission(
 ) -> Dict[str, Union[Tuple, None]]:
     """
     Process a new job submission with validation and time conversion
-    
+
     Args:
         username: The username submitting the job
         sensor: Target sensor name
@@ -60,7 +60,7 @@ def process_job_submission(
         description: Job description
         event_time: Optional event time
         tz: Timezone offset (default: '+00:00')
-        
+
     Returns:
         Dict containing either processed values tuple or error message
     """
@@ -70,13 +70,13 @@ def process_job_submission(
         f"start_time={start_time}, end_time={end_time}, description={description}, "
         f"event_time={event_time}, tz={tz}"
     )
-    
+
     try:
         # Convert times to UTC for validation and epoch conversion
         utc_start_time = parse_and_convert_to_utc(start_time, tz)
         utc_end_time = parse_and_convert_to_utc(end_time, tz)
         utc_event_time = parse_and_convert_to_utc(event_time, tz) if event_time else None
-        
+
         # Handle event time logic
         if utc_event_time:
             if not utc_start_time:
@@ -118,33 +118,33 @@ def process_job_submission(
 def check_job_permissions(job_id: int, username: str) -> Tuple[bool, Optional[str], int]:
     """
     Check if user has permission to access/modify a job
-    
+
     Args:
         job_id: The ID of the job to check
         username: The username requesting access
-        
+
     Returns:
         Tuple of (has_permission, error_message, http_status_code)
     """
     job = db("SELECT status, submitted_by FROM jobs WHERE id = %s", (job_id,))
-    
+
     if not job:
         return False, "Job not found", 404
-        
+
     if job[0][1] != username:
         user_role = get_user_role(username)
         if user_role != 'admin':
             return False, "Permission denied", 403
-            
+
     return True, None, 200
 
 def format_job_data(row: Tuple) -> Dict[str, Any]:
     """
     Format raw job database row into JSON-friendly dictionary
-    
+
     Args:
         row: Database row tuple containing job data
-        
+
     Returns:
         Dictionary with formatted job data
     """

@@ -162,7 +162,7 @@ def get_subnet_mappings():
             # Pattern 3: Source with specific destination
             if not is_valid_subnet(src_subnet) or not is_valid_subnet(dst_subnet):
                 return jsonify({"error": "Invalid subnet format"}), 400
-            
+
             # Query both source and destination location tables
             src_query = f"""
                 SELECT DISTINCT subnet, sensor, device
@@ -174,7 +174,7 @@ def get_subnet_mappings():
                 FROM loc_dst_{dst_loc_canonical.lower()}
                 WHERE subnet >>= %s::inet
             """
-            
+
             try:
                 src_rows = db(src_query, [src_subnet])
                 dst_rows = db(dst_query, [dst_subnet])
@@ -195,7 +195,7 @@ def get_subnet_mappings():
                             'sensor': src[1],
                             'device': src[2]
                         })
-            
+
             return jsonify({
                 'mappings': mappings,
                 'count': len(mappings)
@@ -205,14 +205,14 @@ def get_subnet_mappings():
             # Pattern 1: Source-only search
             if not is_valid_subnet(src_subnet):
                 return jsonify({"error": "Invalid source subnet format"}), 400
-            
+
             # Query the specific location's source table
             query = f"""
                 SELECT DISTINCT subnet, sensor, device
                 FROM loc_src_{src_loc_canonical.lower()}
                 WHERE subnet >>= %s::inet
             """
-            
+
             try:
                 rows = db(query, [src_subnet])
                 mappings = [{
@@ -221,7 +221,7 @@ def get_subnet_mappings():
                     'sensor': row[1],
                     'device': row[2]
                 } for row in rows]
-                
+
                 return jsonify({
                     'mappings': mappings,
                     'count': len(mappings)
@@ -235,14 +235,14 @@ def get_subnet_mappings():
             # Pattern 2: Destination-only search
             if not is_valid_subnet(dst_subnet):
                 return jsonify({"error": "Invalid destination subnet format"}), 400
-            
+
             # Query the specific location's destination table
             query = f"""
                 SELECT DISTINCT subnet, sensor, device
                 FROM loc_dst_{dst_loc_canonical.lower()}
                 WHERE subnet >>= %s::inet
             """
-            
+
             try:
                 rows = db(query, [dst_subnet])
                 mappings = [{
@@ -251,7 +251,7 @@ def get_subnet_mappings():
                     'sensor': row[1],
                     'device': row[2]
                 } for row in rows]
-                
+
                 return jsonify({
                     'mappings': mappings,
                     'count': len(mappings)
@@ -275,16 +275,16 @@ def get_subnet_mappings():
             if dst_loc_canonical:
                 query += " AND dst_location = %s"
                 params.append(dst_loc_canonical)
-            
+
             query += " GROUP BY src_location, dst_location ORDER BY count DESC LIMIT 100"
-            
+
             rows = db(query, params)
             mappings = [{
                 'src_location': row[0],
                 'dst_location': row[1],
                 'count': row[2]
             } for row in rows]
-            
+
             return jsonify({
                 'mappings': mappings,
                 'count': len(mappings)

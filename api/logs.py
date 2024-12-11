@@ -45,11 +45,15 @@ def get_log_files():
 def tail_file(file_path, num_lines=1000):
     """Get the last N lines of a file"""
     try:
+        logger.debug(f"Opening file for tailing: {file_path}")
         with open(file_path, 'r') as f:
-            # Use deque with maxlen for memory efficiency
-            return list(deque(f, num_lines))
+            logger.debug("File opened successfully, reading lines")
+            lines = list(deque(f, num_lines))
+            logger.debug(f"Read {len(lines)} lines from file")
+            return lines
     except Exception as e:
         logger.error(f"Error tailing file {file_path}: {e}")
+        logger.debug(f"Tail file exception details: {type(e).__name__}: {str(e)}")
         return []
 
 @logs_bp.route('/api/v1/logs', methods=['GET'])
@@ -75,17 +79,30 @@ def list_logs():
 def get_log_content(log_file):
     """Get content of a log file"""
     try:
+        logger.debug(f"Attempting to get content for log file: {log_file}")
+
         # Basic validation of log file path
         if not log_file or '..' in log_file:
+            logger.debug(f"Invalid log file path detected: {log_file}")
             return jsonify({"error": "Invalid log file path"}), 400
 
         # Get absolute path to log file
         log_path = os.path.join(LOG_PATH, log_file)
+        logger.debug(f"Full log path: {log_path}")
+
         if not os.path.exists(log_path):
+            logger.debug(f"Log file not found at path: {log_path}")
             return jsonify({"error": "Log file not found"}), 404
 
+        # Log file stats
+        stats = os.stat(log_path)
+        logger.debug(f"Log file size: {stats.st_size} bytes")
+        logger.debug(f"Log file permissions: {oct(stats.st_mode)}")
+
         # Get last 1000 lines by default
+        logger.debug("Attempting to read last 1000 lines")
         lines = tail_file(log_path)
+        logger.debug(f"Successfully read {len(lines)} lines from log file")
 
         return jsonify({
             'content': lines,
@@ -93,5 +110,6 @@ def get_log_content(log_file):
         }), 200
 
     except Exception as e:
-        logger.error(f"Error getting log content: {e}")
+        logger.error(f"Error getting log content: {str(e)}")
+        logger.debug(f"Exception details: {type(e).__name__}: {str(e)}")
         return jsonify({"error": "Failed to get log content"}), 500

@@ -25,7 +25,7 @@ class JobMonitorThread(Thread):
         try:
             if len(task_files) == 0:
                 return False
-            
+
             # If only one file, just move it to final location
             if len(task_files) == 1:
                 src_file = task_files[0]
@@ -80,7 +80,7 @@ class JobMonitorThread(Thread):
         try:
             if result_path:
                 db("""
-                    UPDATE jobs 
+                    UPDATE jobs
                     SET status = %s,
                         result_path = %s,
                         last_modified = NOW()
@@ -88,7 +88,7 @@ class JobMonitorThread(Thread):
                 """, (status, result_path, job_id))
             else:
                 db("""
-                    UPDATE jobs 
+                    UPDATE jobs
                     SET status = %s,
                         last_modified = NOW()
                     WHERE id = %s
@@ -132,13 +132,13 @@ class JobMonitorThread(Thread):
     def run(self):
         """Main thread loop"""
         self.logger.info("Job monitor thread starting")
-        
+
         while not self.stop_event.is_set():
             try:
                 # Get all running jobs
                 jobs = db("""
-                    SELECT id 
-                    FROM jobs 
+                    SELECT id
+                    FROM jobs
                     WHERE status = 'Running'
                 """)
 
