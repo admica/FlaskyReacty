@@ -4,5 +4,6 @@ __pycache__/
 *.log
 logs/*
 pcapCtrl
+venv_*
 node_modules
 package-lock.json
