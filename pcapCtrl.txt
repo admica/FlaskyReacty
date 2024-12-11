@@ -1,0 +1,40 @@
+# pcapCtrl usage
+$ pcapCtrl -h
+Usage: pcapCtrl -h <host> -c <command> -p <port>
+Options:
+  -h <host>     Specify the host to connect to (hostname or IP address)
+  -c <command>  Specify the command to send
+  -p <port>     Specify the port number
+Example: pcapCtrl -H remotehost.domain.com -c "1,192.168.1.1" -p 12345
+
+# example fetching sensor stats
+$ pcapCtrl -h sensor123.company.com -p 12340 -c 0
+{ "Request": "0", "Name": "pcapCollect", "Version": "2.7", "Date": "1732654865", "Runtime": "1040746", "Location": "test", "Device": "napa0", "Workers": "4", "Port": "12340", "Size": "2G", "Output_path": "/pcap/", "Proc": "/usr/local/bin/pcapCollect -d napa0 -s 2G -w 4 -p 12340", "Overflows": "0", "SrcSubnets": "278450", "DstSubnets": "245211", "UniqSubnets": "284475", "AvgIdleTime": "832", "AvgWorkTime": "1" }
+
+# example fetching detailed sensor internal stats
+$ pcapCtrl -h soc-p-pcsl-ax01.soc.nasa.gov -p 12340 -c 6
+{ "worker-0": {"MinIdle": "819", "MaxIdle": "1034", "AvgIdle": "836", "MinWork": "0", "MaxWork": "3", "AvgWork": "0"}, "worker-1": {"MinIdle": "819", "MaxIdle": "1042", "AvgIdle": "835", "MinWork": "1", "MaxWork": "1", "AvgWork": "1"}, "worker-2": {"MinIdle": "820", "MaxIdle": "1038", "AvgIdle": "835", "MinWork": "1", "MaxWork": "2", "AvgWork": "1"}, "worker-3": {"MinIdle": "819", "MaxIdle": "1039", "AvgIdle": "836", "MinWork": "1", "MaxWork": "2", "AvgWork": "1"}, "MinIdle": "819", "MaxIdle": "1042", "AvgIdle": "835", "MinWork": "0", "MaxWork": "3", "AvgWork": "0" }
+
+# example fetching all subnets src+dst
+$ pcapCtrl -h sensor123.company.com -p 12340 -c 3,0
+3,9,0,1.2.3.0,34443315311,1732654967,10.10.10.0,30224646176,1732654967,1.2.4.0,9431382958,1732654967,1.2.5.0,4482468270,1732654967,1.2.6.0,3240075418,1732654967,1.2.7.0,3197297782,1732654967,1.2.8.0,2960069405,1732654967,1.2.9.0,2314819125,1732654965,192.168.1.0,1646944747,1732654967,192.168.2.0,1479519857,1732654967,192.168.3.0,1275453024,1732654966,192.168.168.0,1208274122,1732654948
+
+# example fetching all subnets that are sources
+$ pcapCtrl -h sensor123.company.com -p 12340 -c 4,0
+4,5,0,1.2.3.0,22579913668,1732655292,1.2.4.0,955932063,1732655292,1.2.5.0,5288593275,1732655292,1.2.6.0,2355660323,1732655292,192.168.22.0,2244011978,1732655292
+
+# example fetching all subnets that are destinations
+$ pcapCtrl -h sensor123.company.com -p 12340 -c 5,0
+5,3,0,10.10.10.0,25206697403,1732655471,192.168.168.0,7658742165,1732655471,172.16.5.0,3606104432,1732655471
+
+$ pcapCtrl -h sens2.domain.com -p 12341 -c 0
+{ "Request": "0", "Name": "pcapCollect", "Version": "2.7", "Date": "1732671552", "Runtime": "824718", "Location": "test", "Device": "napa1", "Workers": "4", "Port": "12341", "Size": "2G", "Output_path": "/pcap/", "Proc": "/usr/local/bin/pcapCollect -d napa1 -s 2G -w 4 -p 12341", "Overflows": "0", "SrcSubnets": "127781", "DstSubnets": "126067", "UniqSubnets": "134703", "AvgIdleTime": "1107", "AvgWorkTime": "0" }
+
+$ pcapCtrl -h sens2.domain.com -p 12341 -c 3,0
+3,15,0,172.16.51.0,11136120304,1732671615,10.0.1.0,10883964229,1732671615,172.16.90.0,6065868519,1732671615,172.16.54.0,4008719302,1732671615,172.16.93.0,3404018434,1732671615,192.168.44.0,3283092665,1732671615,192.68.197.0,3154484040,1732671615,172.16.0.0,2347468479,1732671615,192.168.111.0,2268620856,1732671615,172.16.136.0,2187925164,1732671615,10.10.11.0,1977024673,1732671615,192.168.222,1792135434,1732671615,172.16.179.0,1664276852,1732671615,10.222.121.0,1506140547,1732671615,146.154.120.0,1426162123,1732671615
+
+$ pcapCtrl -h sens2.domain.com -p 12341 -c 4,0
+5,5,0,172.16.51.0,7172997738,1732671651,10.0.1.0,3875104344,1732671651,192.168.44.0,2707938665,1732671651,172.16.0.0,2347526676,1732671651,172.16.54.0,1985726308,1732671651
+
+$ pcapCtrl -h sens2.domain.com -p 12341 -c 5,0
+5,10,0,172.16.51.0,7173022650,1732671656,10.0.1.0,387511
