@@ -87,4 +87,3 @@ class NetworkMaintenanceThread(Thread):
 
 # Create and start the maintenance thread
 maintenance_thread = NetworkMaintenanceThread()
-maintenance_thread.start()

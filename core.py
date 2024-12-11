@@ -55,10 +55,16 @@ try:
         raise configparser.Error(f"Missing required sections: {', '.join(missing_sections)}")
 
     # Load and validate critical values
+    PCAP_PATH = os.path.abspath(os.path.join(
+        os.path.dirname(__file__),
+        config.get('DOWNLOADS', 'pcap_path')
+    ))
+    # Ensure directory exists
+    os.makedirs(PCAP_PATH, exist_ok=True)
+
     URL_EXPIRATION = 21600  # 6 hours in seconds
     URL_SECRET = config.get('SERVER', 'secret_key')
-    if not URL_SECRET:
-        raise ValueError("Server secret key not configured")
+    if not URL_SECRET: raise ValueError("Server secret key not configured")
 
     # Validate database configuration
     db_config = {
@@ -69,8 +75,7 @@ try:
         'min': config.getint('DB', 'pool_min'),
         'max': config.getint('DB', 'pool_max')
     }
-    if not all(db_config.values()):
-        raise ValueError("Invalid database configuration")
+    if not all(db_config.values()): raise ValueError("Invalid database configuration")
 
     # Initialize database pool
     db_pool = SimpleConnectionPool(
@@ -91,8 +96,7 @@ try:
         'Incomplete': str(config.get('STATUS', 'Incomplete')),
         'Cancelled': str(config.get('STATUS', 'Cancelled'))
     }
-    if not all(STATUS.values()):
-        raise ValueError("Invalid status configuration")
+    if not all(STATUS.values()): raise ValueError("Invalid status configuration")
 
     RESULTS = {
         'No-data': str(config.get('RESULTS', 'No-data')),
@@ -178,8 +182,7 @@ def db(sql, params=None, max_retries=3):
             logger.warning(f"DB RETRY {attempt}/{max_retries} AFTER: {e}")
             time.sleep(1)
         finally:
-            if conn:
-                db_pool.putconn(conn)
+            if conn: db_pool.putconn(conn)
     return results
 
 def parse_and_convert_to_utc(time_str, tz_str):
