@@ -51,12 +51,8 @@ export interface LoginResponse {
 export interface Sensor {
     name: string;
     status: string;
-    pcap_avail: number;
-    totalspace: number;
-    last_update: string;
+    location: string;
     fqdn?: string;
-    usedspace?: number;
-    location?: string;
 }
 
 export interface SensorSummary {
@@ -69,24 +65,33 @@ export interface SensorSummary {
     }[];
 }
 
+export interface Task {
+    id: number;
+    sensor: string;
+    status: string;
+    started: string | null;
+    completed: string | null;
+    result_message?: string;
+}
+
 export interface Job {
     id: number;
     username: string;
     description: string;
-    sensor: string;
-    src_ip: string;
-    dst_ip: string;
-    event_time: string;
+    location: string;
+    src_ip: string | null;
+    dst_ip: string | null;
+    event_time: string | null;
     start_time: string;
     end_time: string;
     status: string;
-    started: string;
-    completed: string;
-    result: string;
-    filename: string;
-    analysis: string;
+    started: string | null;
+    completed: string | null;
+    result: string | null;
+    filename: string | null;
+    analysis: string | null;
     tz: string;
-    created_at: string;
+    tasks: Task[];
 }
 
 export interface SystemStatus {
@@ -151,7 +156,7 @@ export interface ApiConnection {
 }
 
 export interface LocationsResponse {
-    locations: Location[];
+    locations: string[];
     cached: boolean;
     timestamp: string;
 }
@@ -265,12 +270,27 @@ const apiService = {
         window.location.href = '/login';
     },
 
-    getJobs: async (): Promise<Job[]> => {
+    getJobs: async (filters?: {
+        username?: string;
+        start_time?: string;
+        end_time?: string;
+        status?: string;
+    }): Promise<Job[]> => {
         try {
-            const response = await api.post('/jobs', {});
+            const response = await api.post('/api/v1/jobs', filters || {});
             return response.data;
         } catch (error: any) {
             console.error('Error fetching jobs:', error.response?.data || error.message);
+            throw error.response?.data || error;
+        }
+    },
+
+    getJobDetails: async (jobId: number): Promise<Job> => {
+        try {
+            const response = await api.get(`/api/v1/jobs/${jobId}`);
+            return response.data;
+        } catch (error: any) {
+            console.error('Error fetching job details:', error.response?.data || error.message);
             throw error.response?.data || error;
         }
     },
@@ -328,7 +348,7 @@ const apiService = {
 
     cancelJob: async (jobId: number): Promise<void> => {
         try {
-            await api.post(`/jobs/${jobId}/cancel`);
+            await api.post(`/api/v1/jobs/${jobId}/cancel`);
         } catch (error: any) {
             console.error('Error cancelling job:', error.response?.data || error.message);
             throw error.response?.data || error;
@@ -337,7 +357,7 @@ const apiService = {
 
     deleteJob: async (jobId: number): Promise<void> => {
         try {
-            await api.delete(`/jobs/${jobId}`);
+            await api.delete(`/api/v1/jobs/${jobId}`);
         } catch (error: any) {
             console.error('Error deleting job:', error.response?.data || error.message);
             throw error.response?.data || error;
@@ -510,26 +530,37 @@ const apiService = {
         }
     },
 
-    submitJob: async (data: {
-        sensor: string;
+    submitJob: async (jobData: {
+        location: string;
         src_ip?: string;
         dst_ip?: string;
-        description?: string;
         start_time: string;
         end_time: string;
-    }) => {
+        description?: string;
+        event_time?: string;
+        tz?: string;
+    }): Promise<Job> => {
         try {
-            // Only include IPs if they're not empty strings
-            const jobData = {
-                ...data,
-                src_ip: data.src_ip?.trim() || null,
-                dst_ip: data.dst_ip?.trim() || null,
-            };
-
             const response = await api.post('/api/v1/submit', jobData);
             return response.data;
         } catch (error: any) {
-            console.error('Job submission error:', error);
+            console.error('Error submitting job:', error.response?.data || error.message);
+            throw error.response?.data || error;
+        }
+    },
+
+    getLocations: async (): Promise<LocationsResponse> => {
+        try {
+            const response = await api.get('/api/v1/sensors');
+            // Extract unique locations from sensors
+            const locations = [...new Set(response.data.sensors.map((s: Sensor) => s.location))];
+            return {
+                locations: locations,
+                cached: response.data.cached || false,
+                timestamp: response.data.timestamp || new Date().toISOString()
+            };
+        } catch (error: any) {
+            console.error('Error fetching locations:', error.response?.data || error.message);
             throw error.response?.data || error;
         }
     }

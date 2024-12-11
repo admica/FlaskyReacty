@@ -44,6 +44,7 @@ CREATE TABLE public.locations (
     latitude double precision,
     longitude double precision,
     description text,
+    color text,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP
 );
 

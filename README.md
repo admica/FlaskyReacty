@@ -1,11 +1,11 @@
 $ cat README.md
-# Atlas Horizon
+# PCAP Server & Sensors Infrastructure
 
 A comprehensive system for managing PCAP capture jobs, sensor monitoring, and network analysis.
 
 ## Version
-- Version: 2.1.0
-- Build Date: 2024-12-06
+- Version: 3.0.0
+- Build Date: 2024-12-11
 
 ## Project Structure
 
@@ -190,20 +190,6 @@ npm run build
 - Customizable based on security and performance needs
 - Data storage location configurable per requirements
 
-### Hardware Requirements
-
-#### Server (On-Premise)
-- CPU: 8+ cores recommended
-- RAM: 32GB minimum, 64GB+ recommended
-- Storage: SSD with 1TB+ capacity
-- Network: 10Gbps recommended
-
-#### Sensor Clients
-- CPU: 4+ cores
-- RAM: 16GB minimum
-- Storage: Based on retention requirements
-- Network: 1Gbps minimum, 10Gbps recommended
-
 ### Security Considerations
 - End-to-end encryption for all communications
 - Role-based access control
@@ -211,23 +197,3 @@ npm run build
 - Regular security audits
 - Compliance with industry standards
 
-## About Atlas Labs
-
-Atlas Labs is a pioneering network intelligence company founded in 2024. We specialize in developing enterprise-grade network monitoring, analysis, and security solutions that enable organizations to gain unprecedented visibility into their network infrastructure.
-
-Our flagship product, Atlas Horizon, represents the culmination of extensive research and development in network packet capture, real-time analysis, and advanced visualization technologies. Through our innovative approach to network monitoring, we're helping organizations transform raw network data into actionable intelligence.
-
-Atlas Labs: "Engineering Tomorrow's Network Intelligence"
-Atlas Horizon: "Total Network Awareness"
-
-### Our Mission
-To empower organizations with comprehensive network visibility and intelligence through innovative, scalable solutions that evolve with tomorrow's challenges.
-
-### Core Values
-- Innovation in Network Intelligence
-- Commitment to Security
-- Enterprise Reliability
-- Continuous Evolution
-
-## License
-Proprietary - All rights reserved

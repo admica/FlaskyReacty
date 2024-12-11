@@ -9,6 +9,7 @@ import json
 import traceback
 from queue import Queue
 from threading import Thread
+from datetime import datetime, timezone
 
 from core import logger, db, rate_limit, db_pool, config
 from api.auth import admin_required, activity_tracking
@@ -125,14 +126,104 @@ def initialize_sensors_from_config():
         logger.debug(traceback.format_exc())
         raise
 
+def initialize_locations_from_config():
+    """Initialize locations from config.ini if they don't exist in database"""
+    try:
+        logger.info("Initializing locations from config.ini")
+
+        # Get locations from config
+        if not config.has_section('LOCATIONS'):
+            logger.warning("No LOCATIONS section found in config.ini")
+            return
+
+        config_locations = config.items('LOCATIONS')
+        
+        for site, location_data in config_locations:
+            try:
+                # Parse the JSON-like string into a dict
+                location_info = eval(location_data)  # Safe here as we control the config file
+                
+                # Add site from config key
+                location_info['site'] = site.upper()
+                
+                # Validate required fields
+                required_fields = ['name', 'latitude', 'longitude']  # site is already handled
+                missing_fields = [field for field in required_fields if field not in location_info]
+                if missing_fields:
+                    logger.error(f"Missing required fields for location {site}: {missing_fields}")
+                    continue
+
+                # Check if location exists
+                rows = db("SELECT site FROM locations WHERE site = %s", (location_info['site'],))
+                
+                if not rows:
+                    # Add new location
+                    db("""
+                        INSERT INTO locations
+                        (site, name, latitude, longitude, description, color)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """, (
+                        location_info['site'],
+                        location_info['name'],
+                        float(location_info['latitude']),
+                        float(location_info['longitude']),
+                        location_info.get('description', ''),  # Optional field
+                        location_info.get('color', '#FFFFFF')  # Optional field, default white
+                    ))
+                    logger.info(f"Added new location: {location_info['name']} ({location_info['site']})")
+                else:
+                    # Update existing location if needed
+                    db("""
+                        UPDATE locations
+                        SET name = %s,
+                            latitude = %s,
+                            longitude = %s,
+                            description = %s,
+                            color = %s
+                        WHERE site = %s
+                        AND (
+                            name != %s OR
+                            latitude != %s OR
+                            longitude != %s OR
+                            COALESCE(description, '') != COALESCE(%s, '') OR
+                            COALESCE(color, '') != COALESCE(%s, '')
+                        )
+                    """, (
+                        location_info['name'],
+                        float(location_info['latitude']),
+                        float(location_info['longitude']),
+                        location_info.get('description', ''),
+                        location_info.get('color', '#FFFFFF'),
+                        location_info['site'],
+                        location_info['name'],
+                        float(location_info['latitude']),
+                        float(location_info['longitude']),
+                        location_info.get('description', ''),
+                        location_info.get('color', '#FFFFFF')
+                    ))
+                    logger.debug(f"Updated location if needed: {location_info['name']} ({location_info['site']})")
+
+            except Exception as e:
+                logger.error(f"Error processing location {site}: {e}")
+                logger.debug(traceback.format_exc())
+                continue
+
+        logger.info("Completed location initialization from config.ini")
+
+    except Exception as e:
+        logger.error(f"Error initializing locations: {e}")
+        logger.debug(traceback.format_exc())
+        raise
+
 # Call initialize_sensors_from_config when the blueprint is registered
 @sensors_bp.record_once
 def on_blueprint_init(state):
-    """Initialize sensors when the blueprint is registered"""
+    """Initialize sensors and locations when the blueprint is registered"""
     try:
         initialize_sensors_from_config()
+        initialize_locations_from_config()
     except Exception as e:
-        logger.error(f"Failed to initialize sensors: {e}")
+        logger.error(f"Failed to initialize sensors and locations: {e}")
         # Don't raise the error - allow the app to start even if initialization fails
 
 def create_location_tables(cur, location):
@@ -769,3 +860,67 @@ def get_sensor_devices(sensor_name):
         logger.error(f"Error fetching devices for sensor {sensor_name}: {e}")
         logger.debug(traceback.format_exc())
         return jsonify({"error": "Failed to fetch devices"}), 500
+
+@sensors_bp.route('/api/v1/locations', methods=['GET'])
+@jwt_required()
+@rate_limit()
+def get_locations():
+    """Get all locations"""
+    try:
+        # Try to get from cache first
+        cache_key = get_cache_key('locations', 'all')
+        cached_data = redis_client.get(cache_key)
+
+        if cached_data:
+            try:
+                locations = json.loads(cached_data)
+                return jsonify({
+                    'locations': locations,
+                    'cached': True,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                }), 200
+            except json.JSONDecodeError:
+                # If cache is corrupted, ignore it
+                logger.warning("Corrupted cache data for locations")
+                redis_client.delete(cache_key)
+
+        # Get locations from database
+        locations = db("""
+            SELECT site, name, latitude, longitude, description, color
+            FROM locations
+            ORDER BY name
+        """)
+
+        if locations is None:
+            logger.error("Database query returned None for locations")
+            return jsonify({"error": "Database error"}), 500
+
+        # Format the response
+        location_list = [{
+            'site': loc[0],
+            'name': loc[1],
+            'latitude': float(loc[2]),
+            'longitude': float(loc[3]),
+            'description': loc[4],
+            'color': loc[5]
+        } for loc in locations]
+
+        # Cache the results for 1 hour
+        try:
+            redis_client.setex(
+                cache_key,
+                3600,  # 1 hour
+                json.dumps(location_list)
+            )
+        except Exception as e:
+            logger.warning(f"Failed to cache locations: {e}")
+
+        return jsonify({
+            'locations': location_list,
+            'cached': False,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting locations: {e}")
+        return jsonify({"error": "Failed to get location data"}), 500
