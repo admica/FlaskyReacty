@@ -1,28 +1,7 @@
--- PostgreSQL dumped from database version 16.6 (Ubuntu 16.6-0ubuntu0.24.04.1)
--- Part 2/3
+-- PostgreSQL database version 16.6
+-- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow, only split to make it easier to read and maintain.
+-- This is Part 2 of 5
 
--- First create all sequences
--- Name: job_status_history_id_seq; Type: SEQUENCE; Schema: public; Owner: pcapuser
-CREATE SEQUENCE public.job_status_history_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER SEQUENCE public.job_status_history_id_seq OWNER TO pcapuser;
-
--- Name: jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: pcapuser
-CREATE SEQUENCE public.jobs_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER SEQUENCE public.jobs_id_seq OWNER TO pcapuser;
 
 -- Name: maintenance_operations_id_seq; Type: SEQUENCE; Schema: public; Owner: pcapuser
 CREATE SEQUENCE public.maintenance_operations_id_seq
@@ -70,40 +49,6 @@ CREATE TABLE public.locations (
 
 ALTER TABLE public.locations OWNER TO pcapuser;
 
--- Name: jobs; Type: TABLE; Schema: public; Owner: pcapuser
-CREATE TABLE public.jobs (
-    id integer DEFAULT nextval('public.jobs_id_seq'::regclass) NOT NULL,
-    username character varying(255) NOT NULL,
-    description text,
-    sensor character varying(255) NOT NULL,
-    src_ip character varying(50),
-    dst_ip character varying(50),
-    event_time timestamp with time zone,
-    start_time timestamp with time zone NOT NULL,
-    end_time timestamp with time zone NOT NULL,
-    started timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
-    completed timestamp with time zone,
-    status public.job_status DEFAULT 'Submitted'::public.job_status NOT NULL,
-    parameters jsonb NOT NULL,
-    result jsonb,
-    filename character varying(255),
-    analysis jsonb,
-    tz character varying(10) DEFAULT '+00:00'::character varying
-);
-
-ALTER TABLE public.jobs OWNER TO pcapuser;
-
--- Name: job_status_history; Type: TABLE; Schema: public; Owner: pcapuser
-CREATE TABLE public.job_status_history (
-    id integer DEFAULT nextval('public.job_status_history_id_seq'::regclass) NOT NULL,
-    job_id integer NOT NULL,
-    status public.job_status NOT NULL,
-    "timestamp" timestamp with time zone DEFAULT CURRENT_TIMESTAMP
-);
-
-ALTER TABLE public.job_status_history OWNER TO pcapuser;
-
--- Name: maintenance_operations; Type: TABLE; Schema: public; Owner: pcapuser
 CREATE TABLE public.maintenance_operations (
     id integer DEFAULT nextval('public.maintenance_operations_id_seq'::regclass) NOT NULL,
     "timestamp" timestamp with time zone NOT NULL,

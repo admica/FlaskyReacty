@@ -1,5 +1,6 @@
--- PostgreSQL dumped from database version 16.6 (Ubuntu 16.6-0ubuntu0.24.04.1)
--- Part 3/3
+-- PostgreSQL database version 16.6
+-- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow, only split to make it easier to read and maintain.
+-- This is Part 3 of 5
 
 -- Name: subnet_location_map_1733529600; Type: TABLE; Schema: public; Owner: pcapuser
 CREATE TABLE public.subnet_location_map_1733529600 (
@@ -64,12 +65,6 @@ ALTER TABLE ONLY public.sensor_health_summary ALTER COLUMN id SET DEFAULT nextva
 -- Name: admin_audit_log_id_seq; Type: SEQUENCE SET; Schema: public; Owner: pcapuser
 SELECT pg_catalog.setval('public.admin_audit_log_id_seq', 1, false);
 
--- Name: job_status_history_id_seq; Type: SEQUENCE SET; Schema: public; Owner: pcapuser
-SELECT pg_catalog.setval('public.job_status_history_id_seq', 1, false);
-
--- Name: jobs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: pcapuser
-SELECT pg_catalog.setval('public.jobs_id_seq', 1, false);
-
 -- Name: maintenance_operations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: pcapuser
 SELECT pg_catalog.setval('public.maintenance_operations_id_seq', 1, false);
 
@@ -97,14 +92,6 @@ ALTER TABLE ONLY public.devices
 -- Name: devices devices_sensor_name_key; Type: CONSTRAINT; Schema: public; Owner: pcapuser
 ALTER TABLE ONLY public.devices
     ADD CONSTRAINT devices_sensor_name_key UNIQUE (sensor, name);
-
--- Name: job_status_history job_status_history_pkey; Type: CONSTRAINT; Schema: public; Owner: pcapuser
-ALTER TABLE ONLY public.job_status_history
-    ADD CONSTRAINT job_status_history_pkey PRIMARY KEY (id);
-
--- Name: jobs jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: pcapuser
-ALTER TABLE ONLY public.jobs
-    ADD CONSTRAINT jobs_pkey PRIMARY KEY (id);
 
 -- Name: locations locations_pkey; Type: CONSTRAINT; Schema: public; Owner: pcapuser
 ALTER TABLE ONLY public.locations
@@ -160,7 +147,3 @@ CREATE TRIGGER ensure_partition_exists BEFORE INSERT ON public.subnet_location_m
 
 -- Name: sensors sensor_status_change_trigger; Type: TRIGGER; Schema: public; Owner: pcapuser
 CREATE TRIGGER sensor_status_change_trigger AFTER UPDATE ON public.sensors FOR EACH ROW WHEN ((old.status IS DISTINCT FROM new.status)) EXECUTE FUNCTION public.log_sensor_status_change();
-
--- Name: job_status_history job_status_history_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: pcapuser
-ALTER TABLE ONLY public.job_status_history
-    ADD CONSTRAINT job_status_history_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.jobs(id) ON DELETE CASCADE;

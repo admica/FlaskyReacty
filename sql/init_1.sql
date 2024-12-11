@@ -1,5 +1,6 @@
--- PostgreSQL dumped from database version 16.6 (Ubuntu 16.6-0ubuntu0.24.04.1)
--- Part 1/3
+-- PostgreSQL database version 16.6
+-- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow, only split to make it easier to read and maintain.
+-- This is Part 1 of 5
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -12,18 +13,6 @@ SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 ALTER SCHEMA public OWNER TO pcapuser;
-
--- Name: job_status; Type: TYPE; Schema: public; Owner: pcapuser
-CREATE TYPE public.job_status AS ENUM (
-    'Submitted',
-    'Running',
-    'Retrieving',
-    'Complete',
-    'Incomplete',
-    'Cancelled'
-);
-
-ALTER TYPE public.job_status OWNER TO pcapuser;
 
 -- Name: sensor_status; Type: TYPE; Schema: public; Owner: pcapuser
 CREATE TYPE public.sensor_status AS ENUM (

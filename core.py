@@ -20,8 +20,8 @@ from typing import Dict, Any, List
 from decimal import Decimal
 
 # Version info
-VERSION = '2.1.0'
-BUILD_DATE = '2024-12-02'
+VERSION = '3.0.0'
+BUILD_DATE = '2024-12-11'
 
 # Initialize logger
 logger = SimpleLogger('core')
