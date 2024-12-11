@@ -12,7 +12,7 @@ const api = axios.create({
 // Add request interceptor to add auth token
 api.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('access_token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -145,6 +145,7 @@ export interface Location {
     latitude: number;
     longitude: number;
     description: string;
+    color: string;
 }
 
 export interface ApiConnection {
@@ -156,7 +157,7 @@ export interface ApiConnection {
 }
 
 export interface LocationsResponse {
-    locations: string[];
+    locations: Location[];
     cached: boolean;
     timestamp: string;
 }
@@ -551,16 +552,24 @@ const apiService = {
 
     getLocations: async (): Promise<LocationsResponse> => {
         try {
-            const response = await api.get('/api/v1/sensors');
-            // Extract unique locations from sensors
-            const locations = [...new Set(response.data.sensors.map((s: Sensor) => s.location))];
-            return {
-                locations: locations,
-                cached: response.data.cached || false,
-                timestamp: response.data.timestamp || new Date().toISOString()
-            };
+            console.log('Fetching locations...');
+            const response = await api.get('/network/locations');
+            console.log('Locations response:', response.data);
+            return response.data;
         } catch (error: any) {
             console.error('Error fetching locations:', error.response?.data || error.message);
+            throw error.response?.data || error;
+        }
+    },
+
+    getConnections: async (): Promise<ConnectionsResponse> => {
+        try {
+            console.log('Fetching connections...');
+            const response = await api.get('/network/connections');
+            console.log('Connections response:', response.data);
+            return response.data;
+        } catch (error: any) {
+            console.error('Error fetching connections:', error.response?.data || error.message);
             throw error.response?.data || error;
         }
     }

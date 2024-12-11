@@ -12,6 +12,7 @@ interface GlobePoint {
   name: string;
   radius: number;
   site: string;
+  color: string;
   description?: string;
   connections?: {
     incoming: Array<{ from: string; packets: number }>;
@@ -100,11 +101,15 @@ export function NetworkGlobe({ sourceFilter, destFilter }: NetworkGlobeProps) {
 
   // Resize observer
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) {
+      console.log('Container ref not initialized');
+      return;
+    }
 
     const updateSize = () => {
       if (containerRef.current) {
         const { clientWidth, clientHeight } = containerRef.current;
+        console.log('Container size updated:', { width: clientWidth, height: clientHeight });
         setContainerSize({ width: clientWidth, height: clientHeight });
       }
     };
@@ -129,7 +134,9 @@ export function NetworkGlobe({ sourceFilter, destFilter }: NetworkGlobeProps) {
   // Get current month's globe texture
   const globeTexture = useMemo(() => {
     const currentMonth = new Date().getMonth() + 1;
-    return `/globe${currentMonth}.png`;
+    const texturePath = `/globe${currentMonth}.png`;
+    console.log('Loading globe texture:', texturePath);
+    return texturePath;
   }, []);
 
   // Handle hover states
@@ -193,8 +200,12 @@ export function NetworkGlobe({ sourceFilter, destFilter }: NetworkGlobeProps) {
 
   // Initialize globe
   useEffect(() => {
-    if (!globeEl.current) return;
+    if (!globeEl.current) {
+      console.log('Globe element not initialized yet');
+      return;
+    }
     
+    console.log('Initializing globe with texture:', globeTexture);
     const controls = globeEl.current.controls();
     controls.autoRotate = true;
     controls.autoRotateSpeed = rotationSpeed;
@@ -203,7 +214,11 @@ export function NetworkGlobe({ sourceFilter, destFilter }: NetworkGlobeProps) {
     controls.enableRotate = true;
     controls.minDistance = 120;
     globeEl.current.pointOfView({ lat: 36.5, lng: -86, altitude: zoomLevel });
-  }, [rotationSpeed]);
+
+    // Store initial rotation state
+    wasRotatingRef.current = true;
+    previousRotationSpeedRef.current = rotationSpeed;
+  }, [rotationSpeed, globeTexture, zoomLevel]);
 
   // Handle zoom level changes
   useEffect(() => {
@@ -268,50 +283,58 @@ Last Seen: ${formatTimestamp(conn.latest_seen)}`,
 
   // Load initial data
   useEffect(() => {
-    if (dataLoaded.current) return;
-
     const loadData = async () => {
       try {
-        addDebugMessage('Loading location data');
-        const locResponse = await apiService.getNetworkLocations();
+        addDebugMessage('Loading locations and connections...');
+        console.log('Loading locations and connections...');
         
-        // Log available locations
-        addDebugMessage('Available locations:');
-        locResponse.locations.forEach(loc => {
-          addDebugMessage(`  ${loc.site} (${loc.name}): ${loc.latitude}, ${loc.longitude}`);
-        });
-        
-        const globePoints: GlobePoint[] = locResponse.locations.map((loc: Location) => ({
-          lat: loc.latitude,
-          lng: loc.longitude,
-          name: loc.site,
-          site: loc.site,
-          description: loc.name,
-          radius: 0.5
-        }));
-        setLocations(globePoints);
-        addDebugMessage(`Loaded ${globePoints.length} locations`);
+        // Load locations first
+        const locationsResponse = await apiService.getLocations();
+        console.log('Locations response:', locationsResponse);
+        addDebugMessage(`Loaded ${locationsResponse.locations.length} locations from API`);
 
-        addDebugMessage('Loading connection data');
-        const connResponse = await apiService.getNetworkConnections();
-        
-        // Log received connections
-        addDebugMessage('Received connections:');
-        connResponse.connections.forEach(conn => {
-          addDebugMessage(`  ${conn.src_location} → ${conn.dst_location} (${conn.packet_count} packets)`);
+        // Process locations
+        const points: GlobePoint[] = locationsResponse.locations.map(loc => {
+          console.log('Processing location:', loc);
+          addDebugMessage(`Processing location: ${loc.site} (${loc.latitude}, ${loc.longitude}) color: ${loc.color}`);
+          return {
+            lat: loc.latitude,
+            lng: loc.longitude,
+            name: loc.name,
+            site: loc.site,
+            radius: 0.5,
+            color: loc.color || '#FFFFFF',  // Use location color or default to white
+            description: loc.description
+          };
         });
-        
-        const networkConnections = processConnections(connResponse.connections, locResponse.locations);
-        setConnections(networkConnections);
-        addDebugMessage(`Loaded ${networkConnections.length} connections`);
-        
+        console.log('Setting locations:', points);
+        setLocations(points);
+        addDebugMessage(`Processed ${points.length} locations`);
+
+        // Load connections
+        const connectionsResponse = await apiService.getConnections();
+        console.log('Connections response:', connectionsResponse);
+        addDebugMessage(`Loaded ${connectionsResponse.connections.length} connections from API`);
+
+        // Process connections
+        let processedConnections: NetworkConnection[] = [];
+        if (connectionsResponse.connections) {
+          processedConnections = processConnections(
+            connectionsResponse.connections,
+            locationsResponse.locations
+          ) || [];
+          console.log('Setting connections:', processedConnections);
+          setConnections(processedConnections);
+          addDebugMessage(`Processed ${processedConnections.length} connections`);
+        }
+
         // Show JSC details initially
-        const jscPoint = globePoints.find(point => point.site === 'JSC');
+        const jscPoint = points.find(point => point.site === 'JSC');
         if (jscPoint) {
-          const incomingConnections = networkConnections.filter(
+          const incomingConnections = processedConnections.filter(
             conn => conn.details.dst_location === jscPoint.site
           );
-          const outgoingConnections = networkConnections.filter(
+          const outgoingConnections = processedConnections.filter(
             conn => conn.details.src_location === jscPoint.site
           );
 
@@ -332,19 +355,18 @@ Last Seen: ${formatTimestamp(conn.latest_seen)}`,
             } as GlobePoint
           });
         }
-        
-        // Mark data as loaded only after successful load
+
         dataLoaded.current = true;
       } catch (error: any) {
-        const errorMessage = error.response?.data?.error || error.message || 'Unknown error';
+        const errorMessage = error.response?.data?.error || error.response?.data || error.message || 'Unknown error';
+        console.error('Error loading globe data:', error);
         addDebugMessage(`Error loading data: ${errorMessage}`);
-        console.error('Error loading data:', error);
-        // Reset dataLoaded flag to allow retry
-        dataLoaded.current = false;
       }
     };
 
-    loadData();
+    if (!dataLoaded.current) {
+      loadData();
+    }
   }, [processConnections, addDebugMessage]);
 
   // Handle clicks
@@ -413,49 +435,86 @@ Last Seen: ${formatTimestamp(conn.latest_seen)}`,
   }, [locations, filteredConnections, sourceFilter, destFilter]);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: 'calc(100vh - 80px)', overflow: 'hidden' }}>
-      {/* Globe Container */}
-      <div style={{ width: '100%', height: '100%', background: '#000000' }}>
-        <Globe
-          ref={globeEl}
-          width={containerSize.width}
-          height={containerSize.height}
-          globeImageUrl={globeTexture}
-          backgroundColor="rgba(0,0,0,0)"
-          atmosphereColor="#4facfe"
-          atmosphereAltitude={.2}
-          pointsData={filteredLocations}
-          pointLat="lat"
-          pointLng="lng"
-          pointColor={() => '#ffff00'}
-          pointAltitude={0.06}
-          pointRadius="radius"
-          pointResolution={24}
-          pointsMerge={false}
-          pointLabel={((d: any) => d.name) as any}
-          labelColor={() => '#ffffff'}
-          labelSize={1.5}
-          labelDotRadius={0.5}
-          labelAltitude={0.01}
-          arcsData={filteredConnections}
-          arcStartLat="startLat"
-          arcStartLng="startLng"
-          arcEndLat="endLat"
-          arcEndLng="endLng"
-          arcColor="color"
-          arcDashLength={.4}
-          arcDashGap={.2}
-          arcDashAnimateTime={1500}
-          arcStroke={1}
-          arcLabel="tooltipContent"
-          arcAltitude={arcHeight}
-          onGlobeReady={() => addDebugMessage('Globe rendering complete')}
-          onPointClick={handleLocationClick}
-          onArcClick={handleConnectionClick}
-          onPointHover={handleHoverStart}
-          onArcHover={handleHoverStart}
-        />
+    <div ref={containerRef} style={{
+      width: '100%',
+      height: 'calc(100vh - 120px)',
+      position: 'relative',
+      backgroundColor: '#000000'
+    }}>
+      {/* Loading indicator */}
+      {(!dataLoaded.current || locations.length === 0) && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 10,
+          background: 'rgba(0, 0, 0, 0.7)',
+          padding: '12px 15px',
+          borderRadius: '4px'
+        }}>
+          <Text c="white">Loading globe data...</Text>
+        </div>
+      )}
+
+      {/* Container size debug */}
+      <div style={{
+        position: 'absolute',
+        top: 10,
+        left: 10,
+        zIndex: 10,
+        background: 'rgba(0, 0, 0, 0.7)',
+        padding: '4px 8px',
+        borderRadius: '4px',
+        color: 'white',
+        fontSize: '12px'
+      }}>
+        Container: {containerSize.width}x{containerSize.height}
       </div>
+
+      {/* Globe */}
+      <Globe
+        ref={globeEl}
+        width={containerSize.width}
+        height={containerSize.height}
+        globeImageUrl={globeTexture}
+        backgroundColor="rgba(0,0,0,0)"
+        atmosphereColor="#4facfe"
+        atmosphereAltitude={0.2}
+        pointsData={filteredLocations}
+        pointLat="lat"
+        pointLng="lng"
+        pointColor={(d: any) => d.color}
+        pointAltitude={0.06}
+        pointRadius="radius"
+        pointResolution={24}
+        pointsMerge={false}
+        pointLabel={((d: any) => d.name) as any}
+        labelColor={() => '#ffffff'}
+        labelSize={1.5}
+        labelDotRadius={0.5}
+        labelAltitude={0.01}
+        arcsData={filteredConnections}
+        arcStartLat="startLat"
+        arcStartLng="startLng"
+        arcEndLat="endLat"
+        arcEndLng="endLng"
+        arcColor="color"
+        arcDashLength={0.4}
+        arcDashGap={0.2}
+        arcDashAnimateTime={1500}
+        arcStroke={1}
+        arcLabel="tooltipContent"
+        arcAltitude={arcHeight}
+        onPointHover={handleHoverStart}
+        onArcHover={handleHoverStart}
+        onPointClick={handleLocationClick}
+        onArcClick={handleConnectionClick}
+        onGlobeReady={() => {
+          addDebugMessage('Globe rendering complete');
+          dataLoaded.current = true;
+        }}
+      />
 
       {/* Controls Overlay */}
       <Paper
@@ -634,7 +693,9 @@ Last Seen: ${formatTimestamp(conn.latest_seen)}`,
       >
         <Stack gap="xs">
           <Group justify="space-between">
-            <Text size="xs" fw={500} c="dimmed">Debug Log ({debugMessages.length} messages)</Text>
+            <Text size="xs" fw={500} c="dimmed">
+              Debug Log ({debugMessages.length} messages) - Globe Status: {dataLoaded.current ? 'Loaded' : 'Loading'}
+            </Text>
             <Group gap="xs">
               <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
               <ActionIcon 

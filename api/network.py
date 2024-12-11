@@ -17,6 +17,18 @@ logger = SimpleLogger('network')
 # Create blueprint
 network_bp = Blueprint('network', __name__)
 
+@network_bp.route('/api/v1/network/locations/clear-cache', methods=['POST'])
+@jwt_required()
+def clear_locations_cache():
+    """Clear the locations cache"""
+    try:
+        cache_key = get_cache_key('analytics', 'network', 'locations')
+        redis_client.delete(cache_key)
+        return jsonify({"message": "Locations cache cleared"}), 200
+    except Exception as e:
+        logger.error(f"Error clearing locations cache: {e}")
+        return jsonify({"error": "Failed to clear cache"}), 500
+
 @network_bp.route('/api/v1/network/locations', methods=['GET'])
 @jwt_required()
 @rate_limit()
@@ -42,8 +54,9 @@ def get_locations():
 
         # If not in cache, get from database
         try:
+            logger.debug("Fetching locations from database")
             locations = db("""
-                SELECT site, name, latitude, longitude, description
+                SELECT site, name, latitude, longitude, description, color
                 FROM locations
                 ORDER BY name
             """)
@@ -52,14 +65,23 @@ def get_locations():
                 logger.error("Database query returned None for locations")
                 return jsonify({"error": "Database error"}), 500
 
+            # Log raw location data for debugging
+            for loc in locations:
+                logger.debug(f"Raw location data: site={loc[0]}, name={loc[1]}, color={loc[5]}")
+
             # Format the response
             location_list = [{
                 'site': loc[0],
                 'name': loc[1],
                 'latitude': float(loc[2]),
                 'longitude': float(loc[3]),
-                'description': loc[4]
+                'description': loc[4],
+                'color': loc[5]
             } for loc in locations]
+
+            # Log formatted locations
+            for loc in location_list:
+                logger.debug(f"Formatted location: {loc['site']}, color={loc['color']}")
 
             # Cache the results for 1 hour (locations don't change often)
             try:

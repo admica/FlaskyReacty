@@ -15,21 +15,25 @@ export function NetworkPage() {
   };
 
   return (
-    <Box p="md">
-      <Tabs defaultValue="globe" onChange={handleTabChange}>
+    <Box style={{ 
+      height: 'calc(100vh - 60px)', // Account for main nav
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <Tabs defaultValue="globe" onChange={handleTabChange} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <Tabs.List>
           <Tabs.Tab value="globe">Globe View</Tabs.Tab>
           <Tabs.Tab value="table">Table View</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="globe" pt="xs">
+        <Tabs.Panel value="globe" pt="xs" style={{ flex: 1 }}>
           <NetworkGlobe 
             sourceFilter={sourceFilter}
             destFilter={destFilter}
           />
         </Tabs.Panel>
 
-        <Tabs.Panel value="table" pt="xs">
+        <Tabs.Panel value="table" pt="xs" style={{ flex: 1 }}>
           <NetworkTable 
             sourceFilter={sourceFilter}
             destFilter={destFilter}
