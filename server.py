@@ -46,6 +46,9 @@ from api.sensor_threads import (
 # Import network maintenance
 from api.network_tasks import maintenance_thread
 
+# Import job monitoring
+from job_monitor import job_monitor_thread
+
 # Import Redis client
 from cache_utils import redis_client
 
@@ -59,11 +62,25 @@ def cleanup_handler(signo=None, frame=None):
 
         # Stop network maintenance thread
         if maintenance_thread and maintenance_thread.is_alive():
-            logger.info("Stopping network maintenance thread...")
-            maintenance_thread.stop()
-            maintenance_thread.join(timeout=10)
-            if maintenance_thread.is_alive():
-                logger.warning("Network maintenance thread did not stop gracefully")
+            try:
+                logger.info("Stopping network maintenance thread...")
+                maintenance_thread.stop()
+                maintenance_thread.join(timeout=10)
+                if maintenance_thread.is_alive():
+                    logger.warning("Network maintenance thread did not stop gracefully")
+            except Exception as e:
+                logger.error(f"Error stopping network maintenance thread: {e}")
+
+        # Stop job monitor thread
+        if job_monitor_thread and job_monitor_thread.is_alive():
+            try:
+                logger.info("Stopping job monitor thread...")
+                job_monitor_thread.stop()
+                job_monitor_thread.join(timeout=10)
+                if job_monitor_thread.is_alive():
+                    logger.warning("Job monitor thread did not stop gracefully")
+            except Exception as e:
+                logger.error(f"Error stopping job monitor thread: {e}")
 
         # Stop all sensor threads
         active_threads = list(sensor_queues.keys())
@@ -289,6 +306,14 @@ def after_request(response):
 
 if __name__ == '__main__':
     try:
+        # Start maintenance thread
+        maintenance_thread.start()
+        logger.info("Network maintenance thread started")
+
+        # Start job monitor thread
+        job_monitor_thread.start()
+        logger.info("Job monitor thread started")
+
         # Configure SSL context
         ssl_context = None
         if config.has_section('SSL'):

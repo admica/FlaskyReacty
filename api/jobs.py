@@ -53,15 +53,11 @@ def process_job_submission(username, sensor, src_ip, dst_ip, start_time, end_tim
 
         # Handle event time logic
         if utc_event_time:
-            if not utc_start_time:
-                utc_start_time = utc_event_time - timedelta(minutes=EVENT_START_BEFORE)
-            if not utc_end_time:
-                utc_end_time = utc_event_time + timedelta(minutes=EVENT_END_AFTER)
+            if not utc_start_time: utc_start_time = utc_event_time - timedelta(minutes=EVENT_START_BEFORE)
+            if not utc_end_time: utc_end_time = utc_event_time + timedelta(minutes=EVENT_END_AFTER)
 
-        if not utc_start_time:
-            raise ValueError("Invalid start time format")
-        if not utc_end_time:
-            raise ValueError("Invalid end time format")
+        if not utc_start_time: raise ValueError("Invalid start time format")
+        if not utc_end_time: raise ValueError("Invalid end time format")
 
         # Insert job into database
         job_data = {
