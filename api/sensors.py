@@ -137,15 +137,15 @@ def initialize_locations_from_config():
             return
 
         config_locations = config.items('LOCATIONS')
-        
+
         for site, location_data in config_locations:
             try:
                 # Parse the JSON-like string into a dict
                 location_info = eval(location_data)  # Safe here as we control the config file
-                
+
                 # Add site from config key
                 location_info['site'] = site.upper()
-                
+
                 # Validate required fields
                 required_fields = ['name', 'latitude', 'longitude']  # site is already handled
                 missing_fields = [field for field in required_fields if field not in location_info]
@@ -155,7 +155,7 @@ def initialize_locations_from_config():
 
                 # Check if location exists
                 rows = db("SELECT site FROM locations WHERE site = %s", (location_info['site'],))
-                
+
                 if not rows:
                     # Add new location
                     db("""

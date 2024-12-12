@@ -64,7 +64,7 @@ def submit_job():
 
         # First verify location exists
         logger.debug(f"Verifying location exists: {location}")
-        loc = db("SELECT site FROM locations WHERE site = %s", (location,))
+        loc = db("SELECT site FROM locations WHERE LOWER(site) = LOWER(%s)", (location,))
         if not loc:
             logger.warning(f"Invalid location requested: {location}")
             return jsonify({"error": f"Invalid location: {location}"}), 400
@@ -74,7 +74,7 @@ def submit_job():
         sensors = db("""
             SELECT name, status, fqdn
             FROM sensors
-            WHERE location = %s
+            WHERE LOWER(location) = LOWER(%s)
         """, (location,))
 
         if not sensors:
@@ -112,8 +112,9 @@ def submit_job():
             return jsonify({"error": result['error']}), 400
 
         # Create job record
-        job_data = result['data']
-        job_id = db("""
+        job_values = result['values']
+        logger.debug(f"Creating job with values: {job_values}")
+        job_result = db("""
             INSERT INTO jobs (
                 location, description, source_ip, dest_ip,
                 event_time, start_time, end_time, status,
@@ -122,13 +123,62 @@ def submit_job():
                 %s, %s, %s, %s, %s, %s, %s, 'Submitted', %s
             ) RETURNING id
         """, (
-            location, description, src_ip, dst_ip,
-            job_data['event_time'], job_data['start_time'],
-            job_data['end_time'], username
-        ), fetch_one=True)[0]
+            location, description,
+            src_ip if src_ip else None,
+            dst_ip if dst_ip else None,
+            job_values[5], job_values[6], job_values[7],  # event_time, start_time, end_time
+            username
+        ))
 
+        if not job_result:
+            raise ValueError("Failed to create job - no ID returned")
+
+        job_id = job_result[0]  # Get the integer ID
         logger.info(f"Created job {job_id} for user {username}")
-        return jsonify({"job_id": job_id}), 201
+
+        # Create tasks for each active sensor
+        tasks_created = 0
+        tasks_queued = 0
+        for sensor in active_sensors:
+            logger.debug(f"Creating task for sensor: {sensor[0]}")
+            task_result = db("""
+                INSERT INTO tasks
+                (job_id, sensor, status)
+                VALUES (%s, %s, 'Submitted')
+                RETURNING id
+            """, (job_id, sensor[0]))
+
+            if task_result:
+                task_id = task_result[0]  # Get the integer ID
+                tasks_created += 1
+                # Add task to sensor's queue if available
+                if sensor[0] in sensor_queues:
+                    # Convert times to epochs for the run_job.py script
+                    start_epoch = int(job_values[6].timestamp())  # start_time
+                    end_epoch = int(job_values[7].timestamp())    # end_time
+
+                    # Queue format: "<job_id>_<task_id>"
+                    task_identifier = f"{job_id}_{task_id}"
+                    sensor_queues[sensor[0]].put([
+                        task_identifier,
+                        start_epoch,
+                        end_epoch,
+                        'pcap',  # Default request type
+                        src_ip or '',
+                        dst_ip or ''
+                    ])
+                    tasks_queued += 1
+                    logger.info(f"Queued task {task_identifier} for sensor {sensor[0]}")
+                else:
+                    logger.warning(f"Sensor {sensor[0]} has no queue, task created but not queued")
+
+        logger.info(f"Job {job_id} setup complete: {tasks_created} tasks created, {tasks_queued} tasks queued")
+        return jsonify({
+            "job_id": job_id,
+            "tasks_created": tasks_created,
+            "tasks_queued": tasks_queued,
+            "offline_sensors": offline_sensors if offline_sensors else None
+        }), 201
 
     except Exception as e:
         logger.error(f"Error submitting job: {e}")
@@ -197,7 +247,7 @@ def get_job(job_id):
 
         # Get job and task summary in one query
         job = db("""
-            SELECT 
+            SELECT
                 j.*,
                 COUNT(t.id) as total_tasks,
                 SUM(CASE WHEN t.status = 'Complete' AND t.pcap_size IS NOT NULL THEN 1 ELSE 0 END) as tasks_with_data,
@@ -209,8 +259,8 @@ def get_job(job_id):
                 SUM(CASE WHEN t.status = 'Submitted' THEN 1 ELSE 0 END) as tasks_submitted,
                 SUM(CASE WHEN t.status = 'Aborted' THEN 1 ELSE 0 END) as tasks_aborted,
                 STRING_AGG(
-                    CASE WHEN t.pcap_size IS NOT NULL 
-                    THEN t.sensor || ':' || t.pcap_size 
+                    CASE WHEN t.pcap_size IS NOT NULL
+                    THEN t.sensor || ':' || t.pcap_size
                     ELSE NULL END,
                     ', '
                 ) as sensor_data

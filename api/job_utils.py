@@ -82,7 +82,7 @@ def process_job_submission(
             # Calculate start_time if not provided
             if not utc_start_time:
                 utc_start_time = utc_event_time - timedelta(minutes=EVENT_START_BEFORE)
-            
+
             # Calculate end_time if not provided
             if not utc_end_time:
                 utc_end_time = utc_event_time + timedelta(minutes=EVENT_END_AFTER)
@@ -107,8 +107,10 @@ def process_job_submission(
             'end_time': utc_end_time
         }
 
+        values = tuple(job_data.values())
+        logger.debug(f"Job values tuple: {values}")
         return {
-            'values': tuple(job_data.values()),
+            'values': values,
             'error': None
         }
 

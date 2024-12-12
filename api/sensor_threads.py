@@ -75,10 +75,21 @@ def sensor_thread(sensor: str):
                 xlogger[sensor].info(f'Work: job_id={job_id}, sensor={sensor_name}, start_epoch={start_epoch}, end_epoch={end_epoch}, request_type={request_type}, src_ip={src_ip}, dst_ip={dst_ip}')
 
                 try:
-                    # Update job status to "Running"
-                    db("UPDATE jobs SET status=%s, started=date_trunc('second', NOW()) WHERE id=%s",
-                       (STATUS['Running'], job_id))
-                    xlogger[sensor].info(f'job_id={job_id} Running')
+                    # Get the numeric job ID
+                    job_id_num = int(job_id.split('_')[0])
+                    task_id = f"{job_id}_{sensor_name}"
+
+                    # Update task status to "Running"
+                    db("UPDATE tasks SET status=%s WHERE job_id=%s AND sensor=%s",
+                       (STATUS['Running'], job_id_num, sensor_name))
+                    xlogger[sensor].info(f'task_id={task_id} Running')
+
+                    # Check overall job status and update if needed
+                    job_tasks = db("SELECT status FROM tasks WHERE job_id=%s", (job_id_num,))
+                    all_running = all(task[0] == STATUS['Running'] for task in job_tasks)
+                    if all_running:
+                        db("UPDATE jobs SET status=%s WHERE id=%s",
+                           (STATUS['Running'], job_id_num))
 
                     # Perform the SSH command
                     ssh = paramiko.SSHClient()
@@ -86,7 +97,7 @@ def sensor_thread(sensor: str):
 
                     ssh.connect(sensor_fqdn, key_filename=SSH_PUBKEY, timeout=SSH_TOUT, auth_timeout=SSH_TOUT)
 
-                    cmd = f"/opt/autopcap_client/latest/run_job.py {job_id} {start_epoch} {end_epoch} {request_type} {src_ip} {dst_ip}"
+                    cmd = f"/opt/autopcap_client/latest/run_job.py {task_id} {start_epoch} {end_epoch} {request_type} {src_ip} {dst_ip}"
                     xlogger[sensor].debug(f'ssh cmd={cmd}')
                     stdin, stdout, stderr = ssh.exec_command(cmd, timeout=SSH_MAX)
                     exit_status = stdout.channel.recv_exit_status()
@@ -97,19 +108,23 @@ def sensor_thread(sensor: str):
                     xlogger[sensor].debug(f'SSH stdout: {stdout_output}')
                     xlogger[sensor].debug(f'SSH stderr: {stderr_output}')
 
-                    job_status = db("SELECT status FROM jobs WHERE id = %s", (job_id,))
+                    # Check if job was cancelled
+                    job_status = db("SELECT status FROM jobs WHERE id = %s", (job_id_num,))
                     if not job_status or job_status[0][0] == 'Cancelled':
                         logger.info(f"Job {job_id} was cancelled while running - skipping file retrieval")
+                        db("UPDATE tasks SET status=%s WHERE job_id=%s AND sensor=%s",
+                           (STATUS['Cancelled'], job_id_num, sensor_name))
 
                     else:  # job has not been cancelled
-                        # Update job status to "Retrieving"
-                        db("UPDATE jobs SET status=%s WHERE id=%s",
-                           (STATUS['Retrieving'], job_id))
-                        xlogger[sensor].info(f'job_id={job_id} Retrieving')
+                        # Update task status to "Retrieving"
+                        db("UPDATE tasks SET status=%s WHERE job_id=%s AND sensor=%s",
+                           (STATUS['Retrieving'], job_id_num, sensor_name))
+                        xlogger[sensor].info(f'task_id={task_id} Retrieving')
 
-                        # Fetch generated pcap file from sensor
-                        remote_file_path = f"{REMOTE_PATH}/{job_id}/{job_id}.pcap"
-                        local_file_path = f"{PCAP_PATH}/{job_id}.pcap"
+                        # Create sensor-specific paths
+                        remote_file_path = f"{REMOTE_PATH}/{task_id}/{task_id}.pcap"
+                        local_file_path = f"{PCAP_PATH}/{task_id}.pcap"
+                        os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
 
                         try:
                             sftp = ssh.open_sftp()
@@ -135,7 +150,7 @@ def sensor_thread(sensor: str):
                                     result = f"{file_size / 1000000:.2f}M"
                                 else:
                                     result = f"{file_size / 1000000000:.2f}G"
-                                filename = f"{job_id}.pcap"
+                                filename = f"{task_id}.pcap"
 
                                 # Don't analyze huge files
                                 if file_size < ANALYSIS_MAX_FILESIZE:
@@ -147,20 +162,32 @@ def sensor_thread(sensor: str):
                             filename = None
                             analysis = None
 
-                        # Close out the job
-                        db("UPDATE jobs SET result=%s, filename=%s, status=%s, completed=date_trunc('second', NOW()), analysis=%s WHERE id=%s",
-                           (result, filename, STATUS['Complete'], analysis, job_id))
-                        xlogger[sensor].info(f'Work: job_id={job_id} Complete.')
+                        # Update task completion
+                        db("UPDATE tasks SET result=%s, filename=%s, status=%s, completed=date_trunc('second', NOW()), analysis=%s WHERE job_id=%s AND sensor=%s",
+                           (result, filename, STATUS['Complete'], analysis, job_id_num, sensor_name))
+                        xlogger[sensor].info(f'Task: task_id={task_id} Complete.')
+
+                        # Check if all tasks are complete and update job accordingly
+                        tasks = db("SELECT status FROM tasks WHERE job_id=%s", (job_id_num,))
+                        if all(task[0] == STATUS['Complete'] for task in tasks):
+                            db("UPDATE jobs SET status=%s, completed=date_trunc('second', NOW()) WHERE id=%s",
+                               (STATUS['Complete'], job_id_num))
 
                         if file_size < ANALYSIS_MAX_FILESIZE:
-                            analysis_queue.put([job_id, local_file_path])
+                            analysis_queue.put([task_id, local_file_path])
 
                 except Exception as e:
                     xlogger[sensor].error(f'Exception in job processing: {e}')
                     xlogger[sensor].error(traceback.format_exc())
-                    # Update job status to error or incomplete
-                    db("UPDATE jobs SET status=%s, completed=date_trunc('second', NOW()) WHERE id=%s",
-                       (STATUS['Incomplete'], job_id))
+                    # Update task status to error or incomplete
+                    db("UPDATE tasks SET status=%s, completed=date_trunc('second', NOW()) WHERE job_id=%s AND sensor=%s",
+                       (STATUS['Incomplete'], job_id_num, sensor_name))
+
+                    # Check if all tasks are failed/incomplete and update job accordingly
+                    tasks = db("SELECT status FROM tasks WHERE job_id=%s", (job_id_num,))
+                    if all(task[0] in [STATUS['Incomplete'], STATUS['Error']] for task in tasks):
+                        db("UPDATE jobs SET status=%s, completed=date_trunc('second', NOW()) WHERE id=%s",
+                           (STATUS['Incomplete'], job_id_num))
 
                 finally:
                     queue.task_done()

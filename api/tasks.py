@@ -26,7 +26,7 @@ def get_task(task_id):
 
         # Get task with job and sensor details
         task = db("""
-            SELECT 
+            SELECT
                 t.*,
                 j.submitted_by,
                 j.status as job_status,
@@ -51,36 +51,36 @@ def get_task(task_id):
                     FROM tasks
                     WHERE job_id = t.job_id
                 ) as job_task_summary,
-                CASE 
-                    WHEN t.status = 'Complete' THEN 
-                        CASE 
+                CASE
+                    WHEN t.status = 'Complete' THEN
+                        CASE
                             WHEN t.pcap_size IS NOT NULL THEN 'Complete with data'
                             ELSE 'Complete with no data'
                         END
-                    WHEN t.status = 'Failed' THEN 
+                    WHEN t.status = 'Failed' THEN
                         COALESCE(t.result_message, 'Task failed')
-                    WHEN t.status = 'Running' THEN 
+                    WHEN t.status = 'Running' THEN
                         'Task running on sensor'
-                    WHEN t.status = 'Downloading' THEN 
-                        CASE 
+                    WHEN t.status = 'Downloading' THEN
+                        CASE
                             WHEN t.temp_path IS NOT NULL THEN 'Downloading to ' || t.temp_path
                             ELSE 'Download starting'
                         END
-                    WHEN t.status = 'Submitted' THEN 
+                    WHEN t.status = 'Submitted' THEN
                         'Waiting for sensor thread'
-                    WHEN t.status = 'Skipped' THEN 
+                    WHEN t.status = 'Skipped' THEN
                         COALESCE(t.result_message, 'Task skipped')
-                    WHEN t.status = 'Aborted' THEN 
+                    WHEN t.status = 'Aborted' THEN
                         COALESCE(t.result_message, 'Task aborted')
                 END as status_detail,
-                CASE WHEN t.status IN ('Complete', 'Failed', 'Skipped', 'Aborted') 
-                     THEN true ELSE false 
+                CASE WHEN t.status IN ('Complete', 'Failed', 'Skipped', 'Aborted')
+                     THEN true ELSE false
                 END as is_finished,
-                CASE WHEN t.status IN ('Submitted', 'Running', 'Downloading') 
-                     THEN true ELSE false 
+                CASE WHEN t.status IN ('Submitted', 'Running', 'Downloading')
+                     THEN true ELSE false
                 END as can_be_skipped,
                 CASE WHEN t.status IN ('Failed', 'Aborted') AND j.status != 'Aborted'
-                     THEN true ELSE false 
+                     THEN true ELSE false
                 END as can_be_retried
             FROM tasks t
             JOIN jobs j ON t.job_id = j.id
@@ -173,7 +173,7 @@ def retry_task(task_id):
                     WHERE id = %s
                 """, (task_id,))
                 current = cur.fetchone()
-                
+
                 # Clean up any existing temp file
                 if current and current[0]:
                     try:
@@ -184,7 +184,7 @@ def retry_task(task_id):
 
                 # Reset task status and clear results
                 cur.execute("""
-                    UPDATE tasks 
+                    UPDATE tasks
                     SET status = 'Submitted',
                         retry_count = retry_count + 1,
                         modified_by = %s,
@@ -196,15 +196,15 @@ def retry_task(task_id):
                     WHERE id = %s
                     RETURNING job_id, sensor
                 """, (username, task_id))
-                
+
                 job_id, sensor = cur.fetchone()
 
                 # Update job status if needed
                 cur.execute("""
-                    UPDATE jobs 
+                    UPDATE jobs
                     SET status = 'Running',
                         last_modified = CURRENT_TIMESTAMP
-                    WHERE id = %s 
+                    WHERE id = %s
                     AND status IN ('Failed', 'Partial Complete')
                 """, (job_id,))
 
@@ -301,12 +301,12 @@ def skip_task(task_id):
             with conn.cursor() as cur:
                 # Update task
                 cur.execute("""
-                    UPDATE tasks 
+                    UPDATE tasks
                     SET status = 'Skipped',
                         modified_by = %s,
                         end_time = CURRENT_TIMESTAMP,
-                        result_message = CASE 
-                            WHEN status = 'Downloading' 
+                        result_message = CASE
+                            WHEN status = 'Downloading'
                             THEN 'Task skipped during download'
                             ELSE 'Task skipped by user'
                         END,
@@ -314,7 +314,7 @@ def skip_task(task_id):
                     WHERE id = %s
                     RETURNING job_id, status, temp_path
                 """, (username, task_id))
-                
+
                 job_id, old_status, temp_path = cur.fetchone()
 
                 # Clean up temp file if task was downloading
@@ -327,7 +327,7 @@ def skip_task(task_id):
 
                 # Check if all tasks are finished
                 cur.execute("""
-                    SELECT 
+                    SELECT
                         bool_and(status IN ('Complete', 'Failed', 'Skipped', 'Aborted')) as all_finished,
                         bool_or(status = 'Complete') as has_completed,
                         bool_or(status IN ('Failed', 'Skipped')) as has_failed_or_skipped,
@@ -359,14 +359,14 @@ def skip_task(task_id):
                         new_status = 'Partial Complete'  # Mix of complete and failed/skipped
                     else:
                         new_status = 'Complete'  # All tasks completed
-                    
+
                     cur.execute("""
-                        UPDATE jobs 
+                        UPDATE jobs
                         SET status = %s,
                             last_modified = CURRENT_TIMESTAMP
                         WHERE id = %s
                     """, (new_status, job_id))
-                    
+
                     logger.info(f"Updated job {job_id} status to {new_status}")
 
                 conn.commit()
@@ -416,7 +416,7 @@ def get_location_tasks(location):
 
         # Get active tasks for location
         tasks = db("""
-            SELECT 
+            SELECT
                 t.*,
                 j.submitted_by,
                 j.source_ip,
@@ -428,7 +428,7 @@ def get_location_tasks(location):
             FROM tasks t
             JOIN jobs j ON t.job_id = j.id
             JOIN sensors s ON t.sensor = s.name
-            WHERE j.location = %s 
+            WHERE j.location = %s
             AND t.status IN ('Submitted', 'Running', 'Downloading')
             ORDER BY t.created_at ASC
         """, (location,))
@@ -467,4 +467,4 @@ def get_location_tasks(location):
 
     except Exception as e:
         logger.error(f"Error retrieving location tasks: {e}")
-        return jsonify({"error": "Failed to retrieve location tasks"}), 500 
+        return jsonify({"error": "Failed to retrieve location tasks"}), 500
