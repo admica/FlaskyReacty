@@ -114,9 +114,8 @@ def check_location_specific_tables(cur) -> Dict[str, List[Dict[str, Any]]]:
 
         results = {}
         for loc in locations:
-            loc_lower = loc.lower()
-            src_table = f"loc_src_{loc_lower}"
-            dst_table = f"loc_dst_{loc_lower}"
+            src_table = f"loc_src_{loc}"
+            dst_table = f"loc_dst_{loc}"
 
             src_exists = check_table_exists(cur, src_table)
             dst_exists = check_table_exists(cur, dst_table)

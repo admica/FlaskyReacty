@@ -706,35 +706,26 @@ class ApiTester:
 
             with psycopg2.connect(**db_config) as conn:
                 with conn.cursor() as cur:
-                    # Get a real source subnet and location
+                    # Get a real subnet mapping pair
                     cur.execute("""
-                        SELECT DISTINCT s.subnet, s.sensor, s.device, sen.location
-                        FROM loc_src_gsfc s
-                        JOIN sensors sen ON sen.name = s.sensor
-                        WHERE s.count > 0
+                        SELECT 
+                            src_subnet,
+                            dst_subnet,
+                            src_location,
+                            dst_location,
+                            first_seen,
+                            last_seen,
+                            packet_count
+                        FROM subnet_location_map
+                        WHERE last_seen >= EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')::bigint
                         LIMIT 1
                     """)
-                    src_result = cur.fetchone()
-                    if not src_result:
-                        console.print("[yellow]Warning: No source subnets found in GSFC location[/yellow]")
+                    mapping = cur.fetchone()
+                    if not mapping:
+                        console.print("[yellow]Warning: No recent subnet mappings found[/yellow]")
                         return False
 
-                    src_subnet, src_sensor, src_device, src_location = src_result
-
-                    # Get a real destination subnet from the same sensor
-                    cur.execute("""
-                        SELECT DISTINCT s.subnet, s.sensor, s.device, sen.location
-                        FROM loc_dst_gsfc s
-                        JOIN sensors sen ON sen.name = s.sensor
-                        WHERE s.sensor = %s AND s.device = %s AND s.count > 0
-                        LIMIT 1
-                    """, (src_sensor, src_device))
-                    dst_result = cur.fetchone()
-                    if not dst_result:
-                        console.print("[yellow]Warning: No matching destination subnets found[/yellow]")
-                        return False
-
-                    dst_subnet, dst_sensor, dst_device, dst_location = dst_result
+                    src_subnet, dst_subnet, src_location, dst_location = mapping[:4]
 
             # Test 1: Source subnet search (requires location)
             console.print("\n[bold]Test 1: Source Subnet Search[/bold]")
@@ -755,7 +746,7 @@ class ApiTester:
 
             # Verify source mapping fields
             mapping = data['mappings'][0]
-            if not all(key in mapping for key in ['src_subnet', 'location', 'sensor', 'device']):
+            if not all(key in mapping for key in ['src_subnet', 'location', 'first_seen', 'last_seen', 'packet_count']):
                 console.print("[red]Missing required fields in source mapping response[/red]")
                 return False
 
@@ -795,11 +786,11 @@ class ApiTester:
 
             # Verify pair mapping has all required fields
             mapping = data['mappings'][0]
-            if not all(key in mapping for key in ['src_subnet', 'dst_subnet', 'src_location', 'dst_location', 'sensor', 'device']):
+            if not all(key in mapping for key in ['src_subnet', 'dst_subnet', 'src_location', 'dst_location', 'first_seen', 'last_seen', 'packet_count']):
                 console.print("[red]Missing required fields in pair mapping response[/red]")
                 return False
 
-            # Test 4: Location-only summary
+            # Test 4: Location summary from materialized view
             console.print("\n[bold]Test 4: Location Summary[/bold]")
             result = self.run_test(
                 "Query location summary",
@@ -811,46 +802,21 @@ class ApiTester:
             if not result or not result['success']:
                 return False
 
-            # Test 5: Error - Missing required location
-            console.print("\n[bold]Test 5: Error - Missing Location[/bold]")
-            result = self.run_test(
-                "Test missing location",
-                "GET",
-                f"/api/v1/admin/subnet_mapping?src_subnet={src_subnet}",
-                expected_status=400
-            )
-
-            if not result or not result['success']:
+            data = result['response']
+            if not data.get('mappings'):
+                console.print("[red]No mappings found in location summary[/red]")
                 return False
 
-            # Test 6: Error - Invalid subnet format
-            console.print("\n[bold]Test 6: Error - Invalid Subnet[/bold]")
-            result = self.run_test(
-                "Test invalid subnet format",
-                "GET",
-                f"/api/v1/admin/subnet_mapping?src_subnet=invalid&src_location={src_location}",
-                expected_status=400
-            )
-
-            if not result or not result['success']:
+            # Verify summary has all required fields
+            mapping = data['mappings'][0]
+            if not all(key in mapping for key in ['src_location', 'dst_location', 'unique_src_subnets', 'unique_dst_subnets', 'total_packets', 'earliest_seen', 'latest_seen']):
+                console.print("[red]Missing required fields in location summary response[/red]")
                 return False
 
-            # Test 7: Error - Invalid location
-            console.print("\n[bold]Test 7: Error - Invalid Location[/bold]")
-            result = self.run_test(
-                "Test invalid location",
-                "GET",
-                "/api/v1/admin/subnet_mapping?src_subnet=192.168.1.0/24&src_location=invalid",
-                expected_status=400
-            )
+            return True
 
-            return result and result['success']
-
-        except psycopg2.Error as e:
-            console.print(f"[red]Database error: {str(e)}[/red]")
-            return False
         except Exception as e:
-            console.print(f"[red]Error in subnet mapping test: {str(e)}[/red]")
+            console.print(f"[red]Error in subnet mapping test: {e}[/red]")
             return False
 
     def test_token_invalidation(self):

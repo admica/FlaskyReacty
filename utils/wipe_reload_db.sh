@@ -62,9 +62,9 @@ sudo -u postgres psql pcapdb < /opt/pcapserver/sql/init_2.sql|cat
 error_check "schema import"
 sudo -u postgres psql pcapdb < /opt/pcapserver/sql/init_3.sql|cat
 error_check "schema import"
-sudo -u postgres psql pcapdb < /opt/pcapserver/sql/init_4.sql|cat
-error_check "schema import"
 sudo -u postgres psql pcapdb < /opt/pcapserver/sql/init_5.sql|cat
+error_check "schema import"
+sudo -u postgres psql pcapdb < /opt/pcapserver/sql/init_6_network_mapping.sql|cat
 error_check "schema import"
 echo -e "${NC}"
 

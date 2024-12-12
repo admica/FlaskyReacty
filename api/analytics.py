@@ -70,7 +70,7 @@ def get_sensor_activity():
                             device,
                             COUNT(DISTINCT subnet) as subnet_count,
                             SUM(count) as packet_count
-                        FROM loc_src_{location}
+                        FROM "loc_src_{location}"
                         WHERE last_seen >= %s
                         GROUP BY sensor, device
                     ),
@@ -80,7 +80,7 @@ def get_sensor_activity():
                             device,
                             COUNT(DISTINCT subnet) as subnet_count,
                             SUM(count) as packet_count
-                        FROM loc_dst_{location}
+                        FROM "loc_dst_{location}"
                         WHERE last_seen >= %s
                         GROUP BY sensor, device
                     ),

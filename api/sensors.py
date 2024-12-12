@@ -230,7 +230,7 @@ def create_location_tables(cur, location):
     """Create source and destination subnet tables for a location if they don't exist"""
     try:
         # Normalize location name for table names
-        location = location.lower().replace(' ', '_').strip()
+        location = location.strip()
         if not location:
             return False, "Location name cannot be empty"
 
@@ -241,10 +241,10 @@ def create_location_tables(cur, location):
         logger.info(f"Checking/Creating location tables for {location}")
 
         # Check if tables already exist
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)",
+        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s)",
                    (f'loc_src_{location}',))
         src_exists = cur.fetchone()[0]
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = %s)",
+        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s)",
                    (f'loc_dst_{location}',))
         dst_exists = cur.fetchone()[0]
 
@@ -252,7 +252,7 @@ def create_location_tables(cur, location):
         if not src_exists:
             logger.debug(f"Creating source subnet table loc_src_{location}")
             cur.execute(f"""
-                CREATE TABLE loc_src_{location} (
+                CREATE TABLE "loc_src_{location}" (
                     subnet cidr NOT NULL,
                     count bigint NOT NULL DEFAULT 0,
                     first_seen bigint NOT NULL,
@@ -262,18 +262,18 @@ def create_location_tables(cur, location):
                     PRIMARY KEY (subnet, sensor, device)
                 );
                 -- GiST index for efficient subnet lookups
-                CREATE INDEX idx_src_{location}_subnet
-                ON loc_src_{location} USING gist (subnet inet_ops);
+                CREATE INDEX "idx_src_{location}_subnet"
+                ON "loc_src_{location}" USING gist (subnet inet_ops);
                 -- Index for time-based queries and pruning
-                CREATE INDEX idx_src_{location}_time
-                ON loc_src_{location} (last_seen, first_seen);
+                CREATE INDEX "idx_src_{location}_time"
+                ON "loc_src_{location}" (last_seen, first_seen);
             """)
 
         # Create destination subnet table if it doesn't exist
         if not dst_exists:
             logger.debug(f"Creating destination subnet table loc_dst_{location}")
             cur.execute(f"""
-                CREATE TABLE loc_dst_{location} (
+                CREATE TABLE "loc_dst_{location}" (
                     subnet cidr NOT NULL,
                     count bigint NOT NULL DEFAULT 0,
                     first_seen bigint NOT NULL,
@@ -283,23 +283,23 @@ def create_location_tables(cur, location):
                     PRIMARY KEY (subnet, sensor, device)
                 );
                 -- GiST index for efficient subnet lookups
-                CREATE INDEX idx_dst_{location}_subnet
-                ON loc_dst_{location} USING gist (subnet inet_ops);
+                CREATE INDEX "idx_dst_{location}_subnet"
+                ON "loc_dst_{location}" USING gist (subnet inet_ops);
                 -- Index for time-based queries and pruning
-                CREATE INDEX idx_dst_{location}_time
-                ON loc_dst_{location} (last_seen, first_seen);
+                CREATE INDEX "idx_dst_{location}_time"
+                ON "loc_dst_{location}" (last_seen, first_seen);
             """)
 
         # Set optimal table storage parameters
         if src_exists or dst_exists:
             for prefix in ['src', 'dst']:
                 cur.execute(f"""
-                    ALTER TABLE loc_{prefix}_{location} SET (
+                    ALTER TABLE "loc_{prefix}_{location}" SET (
                         autovacuum_vacuum_scale_factor = 0.1,
                         autovacuum_analyze_scale_factor = 0.05,
                         autovacuum_vacuum_threshold = 1000,
                         autovacuum_analyze_threshold = 1000
-                    )
+                    );
                 """)
 
         tables_created = (not src_exists) or (not dst_exists)
@@ -320,7 +320,7 @@ def analyze_location_tables(cur, location):
     try:
         logger.info(f"Analyzing location tables for {location}")
         for prefix in ['src', 'dst']:
-            table_name = f'loc_{prefix}_{location}'
+            table_name = f'"loc_{prefix}_{location}"'
             cur.execute(f"ANALYZE VERBOSE {table_name}")
         logger.info(f"Completed analysis of location tables for {location}")
         return True
@@ -335,7 +335,7 @@ def vacuum_location_tables(cur, location):
         # Need to be outside a transaction for vacuum
         cur.execute("COMMIT")
         for prefix in ['src', 'dst']:
-            table_name = f'loc_{prefix}_{location}'
+            table_name = f'"loc_{prefix}_{location}"'
             cur.execute(f"VACUUM ANALYZE {table_name}")
         logger.info(f"Completed vacuum of location tables for {location}")
         return True
@@ -348,6 +348,7 @@ def check_table_bloat(cur, location):
     try:
         for prefix in ['src', 'dst']:
             table_name = f'loc_{prefix}_{location}'
+            quoted_table = f'"{table_name}"'
             cur.execute(f"""
                 SELECT pg_size_pretty(pg_total_relation_size(%s)) as total_size,
                        pg_size_pretty(pg_table_size(%s)) as table_size,
@@ -355,7 +356,7 @@ def check_table_bloat(cur, location):
                        n_dead_tup::float / n_live_tup as dead_ratio
                 FROM pg_stat_user_tables
                 WHERE relname = %s
-            """, (table_name, table_name, table_name, table_name))
+            """, (quoted_table, quoted_table, quoted_table, table_name))
 
             result = cur.fetchone()
             if result and result[3] > 0.2:  # More than 20% dead tuples
@@ -374,8 +375,8 @@ def check_table_bloat(cur, location):
 def drop_location_tables(cur, location):
     """Drop source and destination subnet tables for a location if they exist"""
     try:
-        # Convert location to valid table name (lowercase, no spaces)
-        location = location.lower().replace(' ', '_')
+        # Just strip spaces, preserve case
+        location = location.strip()
 
         logger.info(f"Starting deletion of location tables for {location}")
 
@@ -385,13 +386,13 @@ def drop_location_tables(cur, location):
         # Drop source subnet table if exists
         logger.debug(f"Dropping source subnet table loc_src_{location}")
         cur.execute(f"""
-            DROP TABLE IF EXISTS loc_src_{location};
+            DROP TABLE IF EXISTS "loc_src_{location}";
         """)
 
         # Drop destination subnet table if exists
         logger.debug(f"Dropping destination subnet table loc_dst_{location}")
         cur.execute(f"""
-            DROP TABLE IF EXISTS loc_dst_{location};
+            DROP TABLE IF EXISTS "loc_dst_{location}";
         """)
 
         # Commit transaction

@@ -91,22 +91,23 @@ def add_subnet_mapping():
         # Insert mapping
         db("""
             INSERT INTO subnet_location_map (
-                subnet,
+                src_subnet,
+                dst_subnet,
                 src_location,
                 dst_location,
                 first_seen,
                 last_seen,
-                count
+                packet_count
             ) VALUES (
-                %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s
             )
-            ON CONFLICT (subnet, src_location, dst_location)
-            DO UPDATE SET
-                last_seen = GREATEST(subnet_location_map.last_seen, EXCLUDED.last_seen),
+            ON CONFLICT (id, last_seen) DO UPDATE SET
                 first_seen = LEAST(subnet_location_map.first_seen, EXCLUDED.first_seen),
-                count = EXCLUDED.count
+                packet_count = subnet_location_map.packet_count + EXCLUDED.packet_count,
+                last_updated = CURRENT_TIMESTAMP
         """, (
             data['src_subnet'],
+            data['dst_subnet'],
             data['src_location'],
             data['dst_location'],
             data['first_seen'],
@@ -114,10 +115,7 @@ def add_subnet_mapping():
             data['packet_count']
         ))
 
-        return jsonify({
-            "message": "Subnet mapping added successfully",
-            "mapping": data
-        }), 201
+        return jsonify({"message": "Subnet mapping added successfully"}), 201
 
     except Exception as e:
         logger.error(f"Error adding subnet mapping: {e}")
@@ -163,63 +161,71 @@ def get_subnet_mappings():
             if not is_valid_subnet(src_subnet) or not is_valid_subnet(dst_subnet):
                 return jsonify({"error": "Invalid subnet format"}), 400
 
-            # Query both source and destination location tables
-            src_query = f"""
-                SELECT DISTINCT subnet, sensor, device
-                FROM loc_src_{src_loc_canonical.lower()}
-                WHERE subnet >>= %s::inet
+            # Query the subnet_location_map table directly
+            query = """
+                SELECT DISTINCT
+                    src_subnet,
+                    dst_subnet,
+                    src_location,
+                    dst_location,
+                    first_seen,
+                    last_seen,
+                    packet_count
+                FROM subnet_location_map
+                WHERE src_subnet >>= %s::inet
+                AND dst_subnet >>= %s::inet
+                AND src_location = %s
+                AND dst_location = %s
+                AND last_seen >= EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')::bigint
             """
-            dst_query = f"""
-                SELECT DISTINCT subnet, sensor, device
-                FROM loc_dst_{dst_loc_canonical.lower()}
-                WHERE subnet >>= %s::inet
-            """
-
+            
             try:
-                src_rows = db(src_query, [src_subnet])
-                dst_rows = db(dst_query, [dst_subnet])
+                rows = db(query, [src_subnet, dst_subnet, src_loc_canonical, dst_loc_canonical])
+                mappings = [{
+                    'src_subnet': str(row[0]),
+                    'dst_subnet': str(row[1]),
+                    'src_location': row[2],
+                    'dst_location': row[3],
+                    'first_seen': row[4],
+                    'last_seen': row[5],
+                    'packet_count': row[6]
+                } for row in rows]
+
+                return jsonify({
+                    'mappings': mappings,
+                    'count': len(mappings)
+                }), 200
+
             except Exception as e:
-                logger.error(f"Error querying location tables: {e}")
-                return jsonify({"error": "Failed to query location tables"}), 500
-
-            # Find matching sensor/device pairs
-            mappings = []
-            for src in src_rows:
-                for dst in dst_rows:
-                    if src[1] == dst[1] and src[2] == dst[2]:  # Same sensor and device
-                        mappings.append({
-                            'src_subnet': str(src[0]),
-                            'dst_subnet': str(dst[0]),
-                            'src_location': src_loc_canonical,
-                            'dst_location': dst_loc_canonical,
-                            'sensor': src[1],
-                            'device': src[2]
-                        })
-
-            return jsonify({
-                'mappings': mappings,
-                'count': len(mappings)
-            }), 200
+                logger.error(f"Error querying subnet mappings: {e}")
+                return jsonify({"error": "Failed to query subnet mappings"}), 500
 
         elif src_subnet:
             # Pattern 1: Source-only search
             if not is_valid_subnet(src_subnet):
                 return jsonify({"error": "Invalid source subnet format"}), 400
 
-            # Query the specific location's source table
-            query = f"""
-                SELECT DISTINCT subnet, sensor, device
-                FROM loc_src_{src_loc_canonical.lower()}
-                WHERE subnet >>= %s::inet
+            query = """
+                SELECT DISTINCT
+                    src_subnet,
+                    src_location,
+                    first_seen,
+                    last_seen,
+                    packet_count
+                FROM subnet_location_map
+                WHERE src_subnet >>= %s::inet
+                AND src_location = %s
+                AND last_seen >= EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')::bigint
             """
 
             try:
-                rows = db(query, [src_subnet])
+                rows = db(query, [src_subnet, src_loc_canonical])
                 mappings = [{
                     'src_subnet': str(row[0]),
-                    'location': src_loc_canonical,
-                    'sensor': row[1],
-                    'device': row[2]
+                    'location': row[1],
+                    'first_seen': row[2],
+                    'last_seen': row[3],
+                    'packet_count': row[4]
                 } for row in rows]
 
                 return jsonify({
@@ -228,28 +234,35 @@ def get_subnet_mappings():
                 }), 200
 
             except Exception as e:
-                logger.error(f"Error querying source location table: {e}")
-                return jsonify({"error": "Failed to query source location table"}), 500
+                logger.error(f"Error querying source subnet mappings: {e}")
+                return jsonify({"error": "Failed to query source subnet mappings"}), 500
 
         elif dst_subnet:
             # Pattern 2: Destination-only search
             if not is_valid_subnet(dst_subnet):
                 return jsonify({"error": "Invalid destination subnet format"}), 400
 
-            # Query the specific location's destination table
-            query = f"""
-                SELECT DISTINCT subnet, sensor, device
-                FROM loc_dst_{dst_loc_canonical.lower()}
-                WHERE subnet >>= %s::inet
+            query = """
+                SELECT DISTINCT
+                    dst_subnet,
+                    dst_location,
+                    first_seen,
+                    last_seen,
+                    packet_count
+                FROM subnet_location_map
+                WHERE dst_subnet >>= %s::inet
+                AND dst_location = %s
+                AND last_seen >= EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')::bigint
             """
 
             try:
-                rows = db(query, [dst_subnet])
+                rows = db(query, [dst_subnet, dst_loc_canonical])
                 mappings = [{
                     'dst_subnet': str(row[0]),
-                    'location': dst_loc_canonical,
-                    'sensor': row[1],
-                    'device': row[2]
+                    'location': row[1],
+                    'first_seen': row[2],
+                    'last_seen': row[3],
+                    'packet_count': row[4]
                 } for row in rows]
 
                 return jsonify({
@@ -258,14 +271,21 @@ def get_subnet_mappings():
                 }), 200
 
             except Exception as e:
-                logger.error(f"Error querying destination location table: {e}")
-                return jsonify({"error": "Failed to query destination location table"}), 500
+                logger.error(f"Error querying destination subnet mappings: {e}")
+                return jsonify({"error": "Failed to query destination subnet mappings"}), 500
 
-        # If no subnet filters, return location-based summary
+        # If no subnet filters, return location-based summary from materialized view
         if src_location or dst_location:
             query = """
-                SELECT src_location, dst_location, COUNT(*) as count
-                FROM subnet_location_map
+                SELECT
+                    src_location,
+                    dst_location,
+                    unique_src_subnets,
+                    unique_dst_subnets,
+                    total_packets,
+                    earliest_seen,
+                    latest_seen
+                FROM network_traffic_summary
                 WHERE 1=1
             """
             params = []
@@ -276,13 +296,15 @@ def get_subnet_mappings():
                 query += " AND dst_location = %s"
                 params.append(dst_loc_canonical)
 
-            query += " GROUP BY src_location, dst_location ORDER BY count DESC LIMIT 100"
-
             rows = db(query, params)
             mappings = [{
                 'src_location': row[0],
                 'dst_location': row[1],
-                'count': row[2]
+                'unique_src_subnets': row[2],
+                'unique_dst_subnets': row[3],
+                'total_packets': row[4],
+                'earliest_seen': row[5],
+                'latest_seen': row[6]
             } for row in rows]
 
             return jsonify({

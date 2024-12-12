@@ -29,7 +29,7 @@ class NetworkMaintenanceThread(Thread):
         """Refresh the materialized view"""
         try:
             logger.info("Refreshing network traffic summary view")
-            db("SELECT refresh_network_traffic_summary()")
+            db("REFRESH MATERIALIZED VIEW network_traffic_summary")
             logger.info("Network traffic summary view refreshed successfully")
             return True
         except Exception as e:
@@ -37,14 +37,17 @@ class NetworkMaintenanceThread(Thread):
             return False
 
     def cleanup_old_data(self):
-        """Clean up old subnet mappings"""
+        """Clean up old subnet mappings and update monthly summary"""
         try:
-            logger.info("Cleaning up old subnet mappings")
-            db("SELECT cleanup_old_subnet_mappings()")
-            logger.info("Old subnet mappings cleaned up successfully")
+            logger.info("Running subnet mapping maintenance")
+            # Manage partitions first
+            db("SELECT manage_subnet_partitions()")
+            # Then clean up old data and update monthly summary
+            db("SELECT cleanup_subnet_mappings()")
+            logger.info("Subnet mapping maintenance completed successfully")
             return True
         except Exception as e:
-            logger.error(f"Error cleaning up old subnet mappings: {e}")
+            logger.error(f"Error in subnet mapping maintenance: {e}")
             return False
 
     def run(self):
@@ -52,14 +55,14 @@ class NetworkMaintenanceThread(Thread):
         consecutive_errors = 0
         while not self.stop_event.is_set():
             try:
-                # Refresh view first
-                if not self.refresh_view():
+                # Clean up old data first
+                if not self.cleanup_old_data():
                     consecutive_errors += 1
                 else:
                     consecutive_errors = 0
 
-                # Clean up old data
-                if not self.cleanup_old_data():
+                # Then refresh view
+                if not self.refresh_view():
                     consecutive_errors += 1
                 else:
                     consecutive_errors = 0

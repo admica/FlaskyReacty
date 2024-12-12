@@ -1,6 +1,6 @@
 -- PostgreSQL database version 16.6
--- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow, only split to make it easier to read and maintain.
--- This is Part 1 of 5
+-- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow.
+-- This is Part 1 of 6: Basic Setup and Core Functions
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -34,80 +34,6 @@ CREATE TYPE public.device_status AS ENUM (
 
 ALTER TYPE public.device_status OWNER TO pcapuser;
 
--- Name: cleanup_old_subnet_mappings(); Type: FUNCTION; Schema: public; Owner: pcapuser
-CREATE FUNCTION public.cleanup_old_subnet_mappings() RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    cutoff_time bigint;
-    partition_name text;
-    rows_deleted integer;
-BEGIN
-    cutoff_time := EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')::bigint;
-
-    -- Delete old partitions
-    FOR partition_name IN 
-        SELECT tablename 
-        FROM pg_tables 
-        WHERE tablename LIKE 'subnet_location_map_%'
-        AND split_part(tablename, '_', 4)::bigint < cutoff_time
-    LOOP
-        EXECUTE format('DROP TABLE IF EXISTS %I', partition_name);
-    END LOOP;
-
-    -- Log the cleanup operation
-    INSERT INTO maintenance_operations (
-        timestamp,
-        operation_type,
-        duration_seconds,
-        items_processed,
-        items_removed,
-        details
-    ) VALUES (
-        NOW(),
-        'cleanup_subnet_mappings',
-        0,
-        0,  -- We don't track number of partitions in this version
-        0,
-        jsonb_build_object(
-            'action', 'cleanup_subnet_mappings',
-            'cutoff_time', cutoff_time
-        )
-    );
-END;
-$$;
-
-ALTER FUNCTION public.cleanup_old_subnet_mappings() OWNER TO pcapuser;
-
--- Name: create_hourly_partition(bigint); Type: FUNCTION; Schema: public; Owner: pcapuser
-CREATE FUNCTION public.create_hourly_partition(partition_timestamp bigint) RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    partition_name text;
-    start_range bigint;
-    end_range bigint;
-BEGIN
-    -- Calculate the hour-aligned timestamp
-    start_range := partition_timestamp - (partition_timestamp % 3600);
-    end_range := start_range + 3600;
-    partition_name := 'subnet_location_map_' || start_range::text;
-
-    -- Create the partition if it doesn't exist
-    IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = partition_name) THEN
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS %I PARTITION OF subnet_location_map
-            FOR VALUES FROM (%L) TO (%L)',
-            partition_name, start_range, end_range
-        );
-        -- Set ownership
-        EXECUTE format('ALTER TABLE %I OWNER TO pcapuser', partition_name);
-    END IF;
-END;
-$$;
-
-ALTER FUNCTION public.create_hourly_partition(partition_timestamp bigint) OWNER TO pcapuser;
-
 -- Name: create_location_tables(text); Type: FUNCTION; Schema: public; Owner: pcapuser
 CREATE FUNCTION public.create_location_tables(location text) RETURNS void
     LANGUAGE plpgsql
@@ -115,47 +41,35 @@ CREATE FUNCTION public.create_location_tables(location text) RETURNS void
 BEGIN
     -- Create source subnet table
     EXECUTE format('
-        CREATE TABLE IF NOT EXISTS public.loc_src_%I (
+        CREATE TABLE IF NOT EXISTS public."loc_src_%s" (
             subnet cidr NOT NULL,
             count bigint,
             first_seen bigint,
             last_seen bigint,
             sensor character varying(255) NOT NULL,
             device character varying(255) NOT NULL,
-            CONSTRAINT loc_src_%I_pkey PRIMARY KEY (subnet, sensor, device)
+            CONSTRAINT "loc_src_%s_pkey" PRIMARY KEY (subnet, sensor, device)
         )', location, location);
 
     -- Create destination subnet table
     EXECUTE format('
-        CREATE TABLE IF NOT EXISTS public.loc_dst_%I (
+        CREATE TABLE IF NOT EXISTS public."loc_dst_%s" (
             subnet cidr NOT NULL,
             count bigint,
             first_seen bigint,
             last_seen bigint,
             sensor character varying(255) NOT NULL,
             device character varying(255) NOT NULL,
-            CONSTRAINT loc_dst_%I_pkey PRIMARY KEY (subnet, sensor, device)
+            CONSTRAINT "loc_dst_%s_pkey" PRIMARY KEY (subnet, sensor, device)
         )', location, location);
 
     -- Set ownership
-    EXECUTE format('ALTER TABLE public.loc_src_%I OWNER TO pcapuser', location);
-    EXECUTE format('ALTER TABLE public.loc_dst_%I OWNER TO pcapuser', location);
+    EXECUTE format('ALTER TABLE public."loc_src_%s" OWNER TO pcapuser', location);
+    EXECUTE format('ALTER TABLE public."loc_dst_%s" OWNER TO pcapuser', location);
 END;
 $$;
 
 ALTER FUNCTION public.create_location_tables(location text) OWNER TO pcapuser;
-
--- Name: create_partition_trigger(); Type: FUNCTION; Schema: public; Owner: pcapuser
-CREATE FUNCTION public.create_partition_trigger() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    PERFORM create_hourly_partition(NEW.last_seen);
-    RETURN NEW;
-END;
-$$;
-
-ALTER FUNCTION public.create_partition_trigger() OWNER TO pcapuser;
 
 -- Name: log_admin_changes(); Type: FUNCTION; Schema: public; Owner: pcapuser
 CREATE FUNCTION public.log_admin_changes() RETURNS trigger
@@ -201,23 +115,6 @@ $$;
 
 ALTER FUNCTION public.log_sensor_status_change() OWNER TO pcapuser;
 
--- Name: refresh_network_traffic_summary(); Type: FUNCTION; Schema: public; Owner: pcapuser
-CREATE FUNCTION public.refresh_network_traffic_summary() RETURNS void
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    -- Try concurrent refresh first
-    BEGIN
-        REFRESH MATERIALIZED VIEW CONCURRENTLY network_traffic_summary;
-    EXCEPTION WHEN OTHERS THEN
-        -- Fall back to regular refresh if concurrent fails
-        REFRESH MATERIALIZED VIEW network_traffic_summary;
-    END;
-END;
-$$;
-
-ALTER FUNCTION public.refresh_network_traffic_summary() OWNER TO pcapuser;
-
 -- Name: admin_audit_log_id_seq; Type: SEQUENCE; Schema: public; Owner: pcapuser
 CREATE SEQUENCE public.admin_audit_log_id_seq
     AS integer
@@ -230,7 +127,6 @@ CREATE SEQUENCE public.admin_audit_log_id_seq
 ALTER SEQUENCE public.admin_audit_log_id_seq OWNER TO pcapuser;
 
 SET default_tablespace = '';
-
 SET default_table_access_method = heap;
 
 -- Name: admin_audit_log; Type: TABLE; Schema: public; Owner: pcapuser
@@ -248,34 +144,8 @@ ALTER TABLE public.admin_audit_log OWNER TO pcapuser;
 CREATE TABLE public.admin_users (
     username character varying(255) NOT NULL,
     added_by character varying(255) NOT NULL,
-    added_date timestamp with time zone DEFAULT CURRENT_TIMESTAMP
+    added_date timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT admin_users_pkey PRIMARY KEY (username)
 );
 
 ALTER TABLE public.admin_users OWNER TO pcapuser;
-
--- Name: devices; Type: TABLE; Schema: public; Owner: pcapuser
-CREATE TABLE public.devices (
-    sensor character varying(255) NOT NULL,
-    port integer NOT NULL,
-    name character varying(255) NOT NULL,
-    fqdn character varying(255),
-    description text,
-    device_type character varying(50) NOT NULL,
-    status public.device_status DEFAULT 'Offline'::public.device_status NOT NULL,
-    last_checked timestamp with time zone,
-    runtime bigint DEFAULT 0,
-    workers integer DEFAULT 0,
-    src_subnets integer DEFAULT 0,
-    dst_subnets integer DEFAULT 0,
-    uniq_subnets integer DEFAULT 0,
-    avg_idle_time integer DEFAULT 0,
-    avg_work_time integer DEFAULT 0,
-    overflows integer DEFAULT 0,
-    size character varying(50) DEFAULT '0'::character varying,
-    version character varying(50),
-    output_path character varying(255),
-    proc text,
-    stats_date timestamp with time zone
-);
-
-ALTER TABLE public.devices OWNER TO pcapuser;

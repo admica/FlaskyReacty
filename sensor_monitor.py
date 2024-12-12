@@ -634,10 +634,6 @@ class SensorMonitor:
         """Update subnet_location_map based on loc_src and loc_dst tables for a location"""
         logger.debug(f"Updating subnet_location_map for location {location}")
         try:
-            # Ensure partition exists for current hour
-            current_time = int(time.time())
-            cur.execute("SELECT create_hourly_partition(%s)", (current_time,))
-
             # Get the canonical location name from locations table
             cur.execute("""
                 SELECT site
@@ -660,69 +656,39 @@ class SensorMonitor:
             """, (location,))
             dst_locations = [row[0] for row in cur.fetchall()]
 
-            # Process each destination location separately
+            # Process each destination location separately using new optimized function
+            current_time = int(time.time())
             for dst_location in dst_locations:
                 logger.debug(f"Processing mappings from {src_location} to {dst_location}")
+                cur.execute("SELECT update_subnet_mappings(%s, %s, %s)",
+                          (src_location, dst_location, current_time))
 
-                # Insert new mappings with proper aggregation
-                cur.execute(f"""
-                    WITH aggregated_mappings AS (
-                        SELECT
-                            src.subnet as src_subnet,
-                            dst.subnet as dst_subnet,
-                            %s as src_location,
-                            %s as dst_location,
-                            MIN(LEAST(src.first_seen, dst.first_seen)) as first_seen,
-                            MAX(GREATEST(src.last_seen, dst.last_seen)) as last_seen,
-                            SUM(GREATEST(src.count, dst.count)) as packet_count
-                        FROM loc_src_{location.lower()} src
-                        CROSS JOIN loc_dst_{dst_location.lower()} dst
-                        WHERE
-                            src.last_seen >= %s
-                            AND dst.last_seen >= %s
-                        GROUP BY
-                            src.subnet,
-                            dst.subnet
-                    )
-                    INSERT INTO subnet_location_map (
-                        src_subnet,
-                        dst_subnet,
-                        src_location,
-                        dst_location,
-                        first_seen,
-                        last_seen,
-                        packet_count
-                    )
-                    SELECT
-                        src_subnet,
-                        dst_subnet,
-                        src_location,
-                        dst_location,
-                        first_seen,
-                        last_seen,
-                        packet_count
-                    FROM aggregated_mappings
-                    ON CONFLICT (last_seen, src_subnet, dst_subnet, src_location, dst_location)
-                    DO UPDATE SET
-                        first_seen = LEAST(subnet_location_map.first_seen, EXCLUDED.first_seen),
-                        packet_count = subnet_location_map.packet_count + EXCLUDED.packet_count
-                """, (src_location, dst_location, current_time - 86400, current_time - 86400))
-
-            logger.debug("Successfully updated subnet_location_map")
+            # Refresh the network traffic summary view
+            cur.execute("REFRESH MATERIALIZED VIEW network_traffic_summary")
 
         except Exception as e:
-            logger.error(f"Error updating subnet_location_map: {e}")
-            logger.error(traceback.format_exc())
+            logger.error(f"Error updating subnet location map: {e}")
             raise
 
     def update_device_subnets(self, cur, subnet_data: Dict, sensor_name: str, device_name: str, summary: ProcessingSummary):
         """Update subnet information for a device"""
         logger.debug(f"Updating subnets for device {device_name} on sensor {sensor_name}")
         try:
-            # Get device's location
-            cur.execute("SELECT location FROM sensors WHERE name = %s", (sensor_name,))
-            location = cur.fetchone()[0]
+            # Get device's location and ensure it exists in locations table
+            cur.execute("""
+                SELECT l.site
+                FROM sensors s
+                JOIN locations l ON UPPER(l.site) = UPPER(s.location)
+                WHERE s.name = %s
+            """, (sensor_name,))
+            result = cur.fetchone()
+            if not result:
+                logger.error(f"Location not found for sensor {sensor_name}")
+                return
+            location = result[0]  # Use canonical name
             logger.debug(f"Device location: {location}")
+
+            current_time = int(time.time())
 
             # Process source subnets
             if 'src_subnets' in subnet_data:
@@ -740,12 +706,12 @@ class SensorMonitor:
                     psycopg2.extras.execute_values(
                         cur,
                         f"""
-                        INSERT INTO loc_src_{location}
+                        INSERT INTO "loc_src_{location}"
                             (subnet, count, first_seen, last_seen, sensor, device)
                         VALUES %s
                         ON CONFLICT (subnet, sensor, device) DO UPDATE
-                        SET count = EXCLUDED.count,
-                            last_seen = EXCLUDED.last_seen
+                        SET count = "loc_src_{location}".count + EXCLUDED.count,
+                            last_seen = GREATEST("loc_src_{location}".last_seen, EXCLUDED.last_seen)
                         """,
                         src_values
                     )
@@ -768,20 +734,22 @@ class SensorMonitor:
                     psycopg2.extras.execute_values(
                         cur,
                         f"""
-                        INSERT INTO loc_dst_{location}
+                        INSERT INTO "loc_dst_{location}"
                             (subnet, count, first_seen, last_seen, sensor, device)
                         VALUES %s
                         ON CONFLICT (subnet, sensor, device) DO UPDATE
-                        SET count = EXCLUDED.count,
-                            last_seen = EXCLUDED.last_seen
+                        SET count = "loc_dst_{location}".count + EXCLUDED.count,
+                            last_seen = GREATEST("loc_dst_{location}".last_seen, EXCLUDED.last_seen)
                         """,
                         dst_values
                     )
                     summary.dst_subnets += len(dst_values)
                     summary.unique_subnets.update(v[0] for v in dst_values)
 
-            # Update subnet_location_map with the new data
-            self.update_subnet_location_map(cur, location)
+            # Update subnet mappings using new function with canonical location name
+            cur.execute("""
+                SELECT update_subnet_mappings(%s, %s, %s)
+            """, (location, location, current_time))
 
             logger.debug(f"Successfully updated subnets for device {device_name}")
 

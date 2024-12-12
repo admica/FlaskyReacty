@@ -11,18 +11,8 @@ logger = SimpleLogger('partition_manager')
 def manage_time_partitions(cur, retention_hours=24):
     """Manage subnet location map time-based partitions"""
     try:
-        current_time = int(time.time())
-        hour_start = current_time - (current_time % 3600)
-
-        # Create future partitions (3 hour buffer)
-        for hour_offset in range(-retention_hours, 4):
-            partition_time = hour_start + (hour_offset * 3600)
-            cur.execute("""
-                SELECT create_hourly_partition(%s)
-            """, (partition_time,))
-
-        # Cleanup old partitions (uses internal 24-hour cutoff)
-        cur.execute("SELECT cleanup_old_subnet_mappings()")
+        # Use new optimized partition management function
+        cur.execute("SELECT manage_subnet_partitions(%s, 3)", (retention_hours,))
 
     except Exception as e:
         logger.error(f"Error managing partitions: {e}")
