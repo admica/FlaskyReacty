@@ -6,6 +6,7 @@
 CREATE TYPE public.job_status AS ENUM (
     'Submitted',
     'Running',
+    'Merging',
     'Complete',
     'Partial Complete',
     'Failed',
