@@ -6,17 +6,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { MultiSelect } from "@/components/ui/multi-select"
 import api from '../api/axios'
 
 interface Sensor {
   name: string
   status: string
+  location: string
 }
 
 export function JobSubmissionForm() {
-  const [selectedSensors, setSelectedSensors] = useState<string[]>([])
-  const [availableSensors, setAvailableSensors] = useState<Sensor[]>([])
+  const [selectedLocation, setSelectedLocation] = useState<string>("")
+  const [availableLocations, setAvailableLocations] = useState<string[]>([])
   const [srcIp, setSrcIp] = useState("")
   const [dstIp, setDstIp] = useState("")
   const [startTime, setStartTime] = useState("")
@@ -25,15 +25,17 @@ export function JobSubmissionForm() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const loadSensors = async () => {
+    const loadLocations = async () => {
       try {
         const response = await api.get('/api/v1/sensors')
-        setAvailableSensors(response.data.sensors)
+        // Extract unique locations from sensors
+        const locations = [...new Set(response.data.sensors.map((sensor: Sensor) => sensor.location))]
+        setAvailableLocations(locations.filter(Boolean).sort()) // Remove empty locations and sort
       } catch (error) {
-        console.error('Failed to load sensors:', error)
+        console.error('Failed to load locations:', error)
       }
     }
-    loadSensors()
+    loadLocations()
   }, [])
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -41,7 +43,7 @@ export function JobSubmissionForm() {
     setLoading(true)
     try {
       const response = await api.post('/api/v1/jobs', {
-        sensors: selectedSensors,
+        location: selectedLocation,
         srcIp,
         dstIp,
         startTime,
@@ -50,7 +52,7 @@ export function JobSubmissionForm() {
       })
       console.log('Job submitted:', response.data)
       // Reset form
-      setSelectedSensors([])
+      setSelectedLocation("")
       setSrcIp("")
       setDstIp("")
       setStartTime("")
@@ -65,34 +67,33 @@ export function JobSubmissionForm() {
     }
   }
 
-  const sensorOptions = availableSensors
-    .filter(sensor => sensor.status === 'active')
-    .map(sensor => ({
-      value: sensor.name,
-      label: sensor.name
-    }))
-
   return (
     <form onSubmit={handleSubmit}>
       <Card>
         <CardHeader>
           <CardTitle>Submit New Job</CardTitle>
           <CardDescription>
-            Create a new PCAP analysis job by providing the required parameters.
-            The job will be executed on all selected sensors.
+            Create a new PCAP analysis job by selecting a location and providing the required parameters.
+            The job will be executed on all sensors at the selected location.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="sensors">Sensors</Label>
-            <MultiSelect
-              id="sensors"
-              value={selectedSensors}
-              onChange={setSelectedSensors}
-              options={sensorOptions}
-              placeholder="Select sensors..."
+            <Label htmlFor="location">Location</Label>
+            <select
+              id="location"
+              value={selectedLocation}
+              onChange={(e) => setSelectedLocation(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               required
-            />
+            >
+              <option value="">Select a location...</option>
+              {availableLocations.map((location) => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="srcIp">Source IP</Label>

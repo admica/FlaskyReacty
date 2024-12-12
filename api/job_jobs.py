@@ -207,7 +207,7 @@ def get_jobs():
         params = []
 
         if filters.get('username'):
-            conditions.append("username = %s")
+            conditions.append("j.submitted_by = %s")
             params.append(filters['username'])
 
         if filters.get('start_time'):
@@ -224,12 +224,14 @@ def get_jobs():
 
         # Build and execute query
         query = f"""
-            SELECT id, username, description, sensor, src_ip, dst_ip, event_time,
-                   start_time, end_time, status, started, completed,
-                   result, filename, analysis, tz
-            FROM jobs
+            SELECT j.id, j.submitted_by as username, j.description, j.location,
+                   j.source_ip as src_ip, j.dest_ip as dst_ip, j.event_time,
+                   j.start_time, j.end_time, j.status, j.created_at as started,
+                   j.last_modified as completed, j.result_path as result,
+                   j.result_path as filename, NULL as analysis, 'UTC' as tz
+            FROM jobs j
             WHERE {' AND '.join(conditions)}
-            ORDER BY id DESC
+            ORDER BY j.id DESC
             LIMIT 250
         """
 
@@ -237,7 +239,34 @@ def get_jobs():
         if not rows:
             return jsonify([]), 200
 
-        jobs = [format_job_data(row) for row in rows]
+        # Get tasks for each job
+        jobs = []
+        for row in rows:
+            job_data = format_job_data(row)
+
+            # Get tasks for this job
+            tasks_query = """
+                SELECT id, sensor, status, start_time, end_time, result_message
+                FROM tasks
+                WHERE job_id = %s
+                ORDER BY id
+            """
+            tasks = db(tasks_query, (row[0],))  # row[0] is job_id
+
+            if tasks:
+                job_data['tasks'] = [{
+                    'id': t[0],
+                    'sensor': t[1],
+                    'status': t[2],
+                    'started': t[3].isoformat() if t[3] else None,
+                    'completed': t[4].isoformat() if t[4] else None,
+                    'result_message': t[5]
+                } for t in tasks]
+            else:
+                job_data['tasks'] = []
+
+            jobs.append(job_data)
+
         return jsonify(jobs), 200
 
     except Exception as e:

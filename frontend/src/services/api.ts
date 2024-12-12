@@ -248,11 +248,8 @@ const apiService = {
         try {
             await api.get(`/sensors/${sensorName}/status`);
         } catch (error: any) {
-            console.error('Refresh sensor error:', error.response?.data || error.message);
-            if (error.response?.data) {
-                throw error.response.data;
-            }
-            throw error;
+            console.error('Error refreshing sensor:', error.response?.data || error.message);
+            throw error.response?.data || error;
         }
     },
 
@@ -271,14 +268,9 @@ const apiService = {
         window.location.href = '/login';
     },
 
-    getJobs: async (filters?: {
-        username?: string;
-        start_time?: string;
-        end_time?: string;
-        status?: string;
-    }): Promise<Job[]> => {
+    getJobs: async (params?: { username?: string }): Promise<Job[]> => {
         try {
-            const response = await api.post('/api/v1/jobs', filters || {});
+            const response = await api.get('/jobs', { params });
             return response.data;
         } catch (error: any) {
             console.error('Error fetching jobs:', error.response?.data || error.message);
@@ -537,12 +529,12 @@ const apiService = {
         dst_ip?: string;
         start_time: string;
         end_time: string;
-        description?: string;
+        description: string;
         event_time?: string;
-        tz?: string;
-    }): Promise<Job> => {
+        tz: string;
+    }): Promise<{ job_id: number }> => {
         try {
-            const response = await api.post('/api/v1/submit', jobData);
+            const response = await api.post('/submit', jobData);
             return response.data;
         } catch (error: any) {
             console.error('Error submitting job:', error.response?.data || error.message);

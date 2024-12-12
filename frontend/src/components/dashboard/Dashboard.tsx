@@ -71,8 +71,11 @@ export function Dashboard() {
     src_ip: '',
     dst_ip: '',
     description: '',
+    start_date: null as Date | null,
     start_time: null as Date | null,
+    end_date: null as Date | null,
     end_time: null as Date | null,
+    event_date: null as Date | null,
     event_time: null as Date | null,
   });
 
@@ -112,15 +115,20 @@ export function Dashboard() {
         setIsLoading(true);
         setError(null);
 
-        // Get available locations
-        addDebugMessage('Fetching available locations');
-        const locationsResponse = await apiService.getLocations();
-        if (locationsResponse.locations) {
-          setLocations(locationsResponse.locations.map(l => l.name));
-          addDebugMessage(`Fetched ${locationsResponse.locations.length} locations`);
+        // Get available locations from sensors
+        addDebugMessage('Fetching sensors to get locations');
+        const sensorsResponse = await apiService.getSensors();
+        if (sensorsResponse.sensors) {
+          // Extract unique locations from sensors
+          const uniqueLocations = [...new Set(sensorsResponse.sensors
+            .map(sensor => sensor.location)
+            .filter(Boolean))] // Remove null/empty locations
+            .sort(); // Sort alphabetically
+          setLocations(uniqueLocations);
+          addDebugMessage(`Fetched ${uniqueLocations.length} unique locations from sensors`);
         } else {
-          setError('No locations available');
-          addDebugMessage('Error: No locations available in response');
+          setError('No sensors available');
+          addDebugMessage('Error: No sensors available in response');
         }
 
         // Get user's jobs
@@ -138,20 +146,33 @@ export function Dashboard() {
     loadData();
   }, []);
 
+  const combineDateAndTime = (date: Date | null, time: Date | null) => {
+    if (!date || !time) return null;
+    const combined = new Date(date);
+    combined.setHours(time.getHours());
+    combined.setMinutes(time.getMinutes());
+    combined.setSeconds(time.getSeconds());
+    return combined;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       addDebugMessage('Submitting new job...');
       addDebugMessage(`Job data: ${JSON.stringify(formData)}`);
 
+      const eventDateTime = combineDateAndTime(formData.event_date, formData.event_time);
+      const startDateTime = combineDateAndTime(formData.start_date, formData.start_time);
+      const endDateTime = combineDateAndTime(formData.end_date, formData.end_time);
+
       await apiService.submitJob({
         location: formData.location,
         src_ip: formData.src_ip || undefined,
         dst_ip: formData.dst_ip || undefined,
-        start_time: formData.start_time?.toISOString() || '',
-        end_time: formData.end_time?.toISOString() || '',
+        start_time: startDateTime?.toISOString() || '',
+        end_time: endDateTime?.toISOString() || '',
         description: formData.description || '',
-        event_time: formData.event_time?.toISOString(),
+        event_time: eventDateTime?.toISOString(),
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone
       });
       
@@ -163,8 +184,11 @@ export function Dashboard() {
         src_ip: '',
         dst_ip: '',
         description: '',
+        start_date: null,
         start_time: null,
+        end_date: null,
         end_time: null,
+        event_date: null,
         event_time: null,
       });
       
@@ -327,6 +351,23 @@ export function Dashboard() {
                   placeholder="Select event time"
                   value={formData.event_time}
                   onChange={(value) => setFormData(prev => ({ ...prev, event_time: value }))}
+                  clearable
+                  withSeconds
+                  size="md"
+                  valueFormat="DD MMM YYYY HH:mm:ss"
+                  dropdownType="popover"
+                  styles={{
+                    input: {
+                      '&::-webkit-inner-spin-button': {
+                        WebkitAppearance: 'inner-spin-button',
+                        opacity: 1,
+                        background: 'var(--mantine-color-dark-4)',
+                        border: '1px solid var(--mantine-color-dark-4)',
+                        borderRadius: 'var(--mantine-radius-sm)',
+                        height: '50%'
+                      }
+                    }
+                  }}
                 />
               </Grid.Col>
               <Grid.Col span={6}>
@@ -341,6 +382,24 @@ export function Dashboard() {
                   onChange={(value) => setFormData(prev => ({ ...prev, start_time: value }))}
                   required={!formData.event_time}
                   disabled={!!formData.event_time}
+                  withAsterisk={!formData.event_time}
+                  clearable
+                  withSeconds
+                  size="md"
+                  valueFormat="DD MMM YYYY HH:mm:ss"
+                  dropdownType="popover"
+                  styles={{
+                    input: {
+                      '&::-webkit-inner-spin-button': {
+                        WebkitAppearance: 'inner-spin-button',
+                        opacity: 1,
+                        background: 'var(--mantine-color-dark-4)',
+                        border: '1px solid var(--mantine-color-dark-4)',
+                        borderRadius: 'var(--mantine-radius-sm)',
+                        height: '50%'
+                      }
+                    }
+                  }}
                 />
               </Grid.Col>
               <Grid.Col span={6}>
@@ -350,6 +409,24 @@ export function Dashboard() {
                   onChange={(value) => setFormData(prev => ({ ...prev, end_time: value }))}
                   required={!formData.event_time}
                   disabled={!!formData.event_time}
+                  withAsterisk={!formData.event_time}
+                  clearable
+                  withSeconds
+                  size="md"
+                  valueFormat="DD MMM YYYY HH:mm:ss"
+                  dropdownType="popover"
+                  styles={{
+                    input: {
+                      '&::-webkit-inner-spin-button': {
+                        WebkitAppearance: 'inner-spin-button',
+                        opacity: 1,
+                        background: 'var(--mantine-color-dark-4)',
+                        border: '1px solid var(--mantine-color-dark-4)',
+                        borderRadius: 'var(--mantine-radius-sm)',
+                        height: '50%'
+                      }
+                    }
+                  }}
                 />
               </Grid.Col>
             </Grid>
