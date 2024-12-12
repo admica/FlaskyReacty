@@ -92,6 +92,7 @@ try:
         'Submitted': str(config.get('STATUS', 'Submitted')),
         'Running': str(config.get('STATUS', 'Running')),
         'Retrieving': str(config.get('STATUS', 'Retrieving')),
+        'Merging': str(config.get('STATUS', 'Merging')),
         'Complete': str(config.get('STATUS', 'Complete')),
         'Incomplete': str(config.get('STATUS', 'Incomplete')),
         'Cancelled': str(config.get('STATUS', 'Cancelled'))
