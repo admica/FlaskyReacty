@@ -30,7 +30,7 @@ def submit_job():
     """Submit a new location-based PCAP job"""
     try:
         username = get_jwt_identity()
-        logger.debug(f"Processing job submission for user: {username}")
+        logger.info(f"Processing job submission for user: {username}")
 
         data = request.get_json()
         if not data:
@@ -46,6 +46,9 @@ def submit_job():
         tz = data.get('tz', '+00:00')
         event_time = data.get('event_time')
 
+        logger.info(f"Job request - Location: {location}, Source IP: {src_ip}, Dest IP: {dst_ip}, "
+                   f"Event Time: {event_time}, Start: {start_time}, End: {end_time}, TZ: {tz}")
+
         # Validate required fields
         errors = []
         if not location:
@@ -56,68 +59,97 @@ def submit_job():
             errors.append("Either event time or both start time and end time are required")
 
         if errors:
+            logger.warning(f"Job validation failed: {errors}")
             return jsonify({"error": "Validation failed", "messages": errors}), 400
 
-        # Verify location exists and get distinct sensor names
+        # First verify location exists
+        logger.debug(f"Verifying location exists: {location}")
+        loc = db("SELECT site FROM locations WHERE site = %s", (location,))
+        if not loc:
+            logger.warning(f"Invalid location requested: {location}")
+            return jsonify({"error": f"Invalid location: {location}"}), 400
+
+        # Then get all sensors for location
+        logger.debug(f"Getting sensors for location: {location}")
         sensors = db("""
-            SELECT DISTINCT name, status
+            SELECT name, status, fqdn
             FROM sensors
             WHERE location = %s
         """, (location,))
 
         if not sensors:
+            logger.warning(f"No sensors found for location: {location}")
             return jsonify({"error": f"No sensors found for location: {location}"}), 400
 
         # Check sensor states
-        sensor_states = {sensor[0]: sensor[1] for sensor in sensors}
-        offline_sensors = [name for name, status in sensor_states.items() if status == 'Offline']
+        active_sensors = [s for s in sensors if s[1] != 'Offline']
+        offline_sensors = [s[0] for s in sensors if s[1] == 'Offline']
+
+        logger.info(f"Found {len(active_sensors)} active and {len(offline_sensors)} offline sensors")
+        logger.debug(f"Active sensors: {[s[0] for s in active_sensors]}")
         if offline_sensors:
-            logger.warning(f"Some sensors are offline at location {location}: {offline_sensors}")
+            logger.warning(f"Offline sensors: {offline_sensors}")
+
+        if not active_sensors:
+            logger.error(f"No active sensors available for location: {location}")
+            return jsonify({"error": f"No active sensors found for location: {location}"}), 400
 
         # Process time parameters
-        utc_start_time = parse_and_convert_to_utc(start_time, tz)
-        utc_end_time = parse_and_convert_to_utc(end_time, tz)
-        utc_event_time = parse_and_convert_to_utc(event_time, tz) if event_time else None
+        logger.debug("Processing time parameters")
+        if event_time:
+            utc_event_time = parse_and_convert_to_utc(event_time, tz)
+            utc_start_time = utc_event_time.replace(second=0, microsecond=0)
+            utc_start_time = utc_start_time.replace(minute=utc_start_time.minute - 1)
+            utc_end_time = utc_event_time.replace(second=59, microsecond=999999)
+            utc_end_time = utc_end_time.replace(minute=utc_end_time.minute + 4)
+            logger.info(f"Using event time {event_time}, calculated window: {utc_start_time} to {utc_end_time}")
+        else:
+            utc_start_time = parse_and_convert_to_utc(start_time, tz)
+            utc_end_time = parse_and_convert_to_utc(end_time, tz)
+            utc_event_time = None
+            logger.info(f"Using explicit time window: {utc_start_time} to {utc_end_time}")
 
-        # Handle event time logic
-        if utc_event_time:
-            utc_start_time = utc_event_time - timedelta(minutes=EVENT_START_BEFORE)
-            utc_end_time = utc_event_time + timedelta(minutes=EVENT_END_AFTER)
-
-        # Create the job in Submitted state
+        # Create the job
+        logger.debug("Creating job record")
         job_id = db("""
             INSERT INTO jobs
             (location, description, source_ip, dest_ip, event_time,
              start_time, end_time, status, submitted_by)
             VALUES (%s, %s, %s, %s, %s, %s, %s, 'Submitted', %s)
             RETURNING id
-        """, (location, description, src_ip, dst_ip, utc_event_time,
-              utc_start_time, utc_end_time, username))
+        """, (location, description, src_ip or None, dst_ip or None,
+              utc_event_time, utc_start_time, utc_end_time, username))
 
         if not job_id:
+            logger.error("Failed to create job record")
             return jsonify({"error": "Failed to create job"}), 500
 
         job_id = job_id[0]
+        logger.info(f"Created job {job_id}")
 
-        # Create tasks for each sensor
-        for sensor_name in sensor_states.keys():
+        # Create tasks for each active sensor
+        tasks_created = 0
+        tasks_queued = 0
+        for sensor in active_sensors:
+            logger.debug(f"Creating task for sensor: {sensor[0]}")
             task_id = db("""
                 INSERT INTO tasks
                 (job_id, sensor, status)
                 VALUES (%s, %s, 'Submitted')
                 RETURNING id
-            """, (job_id, sensor_name))
+            """, (job_id, sensor[0]))
 
             if task_id:
-                # Add task to sensor's queue if sensor is online
-                if sensor_states[sensor_name] != 'Offline' and sensor_name in sensor_queues:
+                tasks_created += 1
+                # Add task to sensor's queue
+                if sensor[0] in sensor_queues:
                     # Convert times to epochs for the run_job.py script
                     start_epoch = int(utc_start_time.timestamp())
                     end_epoch = int(utc_end_time.timestamp())
 
                     # Queue format: "<job_id>_<task_id>"
                     task_identifier = f"{job_id}_{task_id[0]}"
-                    sensor_queues[sensor_name].put([
+                    sensor_queues[sensor[0]].put([
                         task_identifier,
                         start_epoch,
                         end_epoch,
@@ -125,19 +157,22 @@ def submit_job():
                         src_ip or '',
                         dst_ip or ''
                     ])
-                    logger.debug(f"Queued task {task_identifier} for sensor {sensor_name}")
+                    tasks_queued += 1
+                    logger.info(f"Queued task {task_identifier} for sensor {sensor[0]}")
                 else:
-                    logger.warning(f"Sensor {sensor_name} is offline or has no queue, task created but not queued")
+                    logger.warning(f"Sensor {sensor[0]} has no queue, task created but not queued")
 
-        logger.info(f'{username} Job Submitted id={job_id}')
+        logger.info(f"Job {job_id} setup complete: {tasks_created} tasks created, {tasks_queued} tasks queued")
         return jsonify({
             "message": "Job submitted successfully",
             "job_id": job_id,
+            "tasks_created": tasks_created,
+            "tasks_queued": tasks_queued,
             "offline_sensors": offline_sensors if offline_sensors else None
         }), 201
 
     except Exception as e:
-        logger.error(f'Error submitting job: {e}')
+        logger.error(f"Error submitting job: {e}")
         logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to submit job"}), 500
 
@@ -196,26 +231,82 @@ def get_jobs():
 @jwt_required()
 @rate_limit()
 def get_job(job_id):
-    """Get details for a specific job"""
+    """Get details for a specific job including task summary"""
     try:
-        current_user = get_jwt_identity()
+        username = get_jwt_identity()
+        logger.debug(f"Getting job {job_id} details for user {username}")
 
-        # Get job details
+        # Get job and task summary in one query
         job = db("""
-            SELECT id, username, description, sensor, event_time,
-                   start_time, end_time, status, started, completed,
-                   result, filename, analysis, tz
-            FROM jobs
-            WHERE id = %s AND username = %s
-        """, (job_id, current_user))
+            SELECT 
+                j.*,
+                COUNT(t.id) as total_tasks,
+                SUM(CASE WHEN t.status = 'Complete' AND t.pcap_size IS NOT NULL THEN 1 ELSE 0 END) as tasks_with_data,
+                SUM(CASE WHEN t.status = 'Complete' AND t.pcap_size IS NULL THEN 1 ELSE 0 END) as tasks_no_data,
+                SUM(CASE WHEN t.status = 'Failed' THEN 1 ELSE 0 END) as tasks_failed,
+                SUM(CASE WHEN t.status = 'Skipped' THEN 1 ELSE 0 END) as tasks_skipped,
+                SUM(CASE WHEN t.status = 'Running' THEN 1 ELSE 0 END) as tasks_running,
+                SUM(CASE WHEN t.status = 'Downloading' THEN 1 ELSE 0 END) as tasks_downloading,
+                SUM(CASE WHEN t.status = 'Submitted' THEN 1 ELSE 0 END) as tasks_submitted,
+                SUM(CASE WHEN t.status = 'Aborted' THEN 1 ELSE 0 END) as tasks_aborted,
+                STRING_AGG(
+                    CASE WHEN t.pcap_size IS NOT NULL 
+                    THEN t.sensor || ':' || t.pcap_size 
+                    ELSE NULL END,
+                    ', '
+                ) as sensor_data
+            FROM jobs j
+            LEFT JOIN tasks t ON j.id = t.job_id
+            WHERE j.id = %s
+            GROUP BY j.id
+        """, (job_id,))
 
-        if not job: return jsonify({"error": "Job not found"}), 404
+        if not job:
+            logger.warning(f"Job {job_id} not found")
+            return jsonify({"error": "Job not found"}), 404
 
-        job_data = format_job_data(job[0])
+        # Check permissions
+        if job[0]['submitted_by'] != username and get_user_role(username) != 'admin':
+            logger.warning(f"User {username} denied access to job {job_id}")
+            return jsonify({"error": "Permission denied"}), 403
+
+        # Format response
+        job_data = {
+            "id": job[0]['id'],
+            "location": job[0]['location'],
+            "description": job[0]['description'],
+            "source_ip": str(job[0]['source_ip']) if job[0]['source_ip'] else None,
+            "dest_ip": str(job[0]['dest_ip']) if job[0]['dest_ip'] else None,
+            "event_time": job[0]['event_time'].isoformat() if job[0]['event_time'] else None,
+            "start_time": job[0]['start_time'].isoformat() if job[0]['start_time'] else None,
+            "end_time": job[0]['end_time'].isoformat() if job[0]['end_time'] else None,
+            "status": job[0]['status'],
+            "submitted_by": job[0]['submitted_by'],
+            "aborted_by": job[0]['aborted_by'],
+            "result_size": job[0]['result_size'],
+            "result_path": job[0]['result_path'],
+            "created_at": job[0]['created_at'].isoformat(),
+            "last_modified": job[0]['last_modified'].isoformat(),
+            "task_summary": {
+                "total": job[0]['total_tasks'],
+                "with_data": job[0]['tasks_with_data'],
+                "no_data": job[0]['tasks_no_data'],
+                "failed": job[0]['tasks_failed'],
+                "skipped": job[0]['tasks_skipped'],
+                "running": job[0]['tasks_running'],
+                "downloading": job[0]['tasks_downloading'],
+                "submitted": job[0]['tasks_submitted'],
+                "aborted": job[0]['tasks_aborted']
+            },
+            "sensor_data": job[0]['sensor_data'].split(', ') if job[0]['sensor_data'] else []
+        }
+
+        logger.info(f"Retrieved job {job_id} with {job_data['task_summary']['total']} tasks")
         return jsonify(job_data), 200
 
     except Exception as e:
         logger.error(f"Error retrieving job details: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to retrieve job details"}), 500
 
 @jobs_bp.route('/api/v1/jobs/<int:job_id>/cancel', methods=['POST'])
