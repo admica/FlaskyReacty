@@ -132,9 +132,18 @@ class JobMonitorThread(Thread):
     def run(self):
         """Main thread loop"""
         self.logger.info("Job monitor thread starting")
+        check_counter = 0
 
         while not self.stop_event.is_set():
             try:
+                time.sleep(1)
+                check_counter += 1
+
+                if check_counter < 15:
+                    continue
+
+                check_counter = 0
+
                 # Get all running jobs
                 jobs = db("""
                     SELECT id
@@ -174,9 +183,6 @@ class JobMonitorThread(Thread):
 
                     if all_final:
                         self.process_completed_job(job_id, task_list)
-
-                # Sleep between checks
-                time.sleep(15)
 
             except Exception as e:
                 self.logger.error(f"Error in job monitor loop: {e}")
