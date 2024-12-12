@@ -21,6 +21,7 @@ import {
     Box,
     Modal,
     Stack,
+    Collapse,
 } from '@mantine/core';
 import { useModals } from '@mantine/modals';
 import {
@@ -31,8 +32,10 @@ import {
     IconSearch,
     IconRefresh,
     IconFileAnalytics,
+    IconChevronDown,
+    IconChevronRight,
 } from '@tabler/icons-react';
-import apiService, { Job } from '../../services/api';
+import apiService, { Job, Task } from '../../services/api';
 
 const ITEMS_PER_PAGE = 50;
 
@@ -51,7 +54,7 @@ export function JobsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+    const [expandedJobIds, setExpandedJobIds] = useState<number[]>([]);
     const navigate = useNavigate();
     const modals = useModals();
     const isAdmin = localStorage.getItem('isAdmin') === 'true';
@@ -84,10 +87,25 @@ export function JobsPage() {
     };
 
     useEffect(() => {
-        loadJobs();
-        // Poll for updates every 30 seconds
-        const interval = setInterval(loadJobs, 30000);
-        return () => clearInterval(interval);
+        // Track if the component is mounted
+        let mounted = true;
+
+        const fetchJobs = async () => {
+            if (!mounted) return;
+            await loadJobs();
+        };
+
+        // Initial load
+        fetchJobs();
+
+        // Set up polling interval
+        const interval = setInterval(fetchJobs, 30000);
+
+        // Cleanup function
+        return () => {
+            mounted = false;
+            clearInterval(interval);
+        };
     }, []);
 
     const handleCancelJob = async (jobId: number) => {
@@ -99,12 +117,21 @@ export function JobsPage() {
         }
     };
 
+    const handleCancelTask = async (jobId: number, sensor: string) => {
+        try {
+            await apiService.cancelTask(jobId, sensor);
+            await loadJobs();
+        } catch (err: any) {
+            setError(err.error || 'Failed to cancel task');
+        }
+    };
+
     const handleDeleteJob = async (jobId: number) => {
         modals.openConfirmModal({
             title: <Title order={3}>Delete Job</Title>,
             children: (
                 <Text size="sm">
-                    Are you sure you want to delete this job? This action cannot be undone.
+                    Are you sure you want to delete this job and all its tasks? This action cannot be undone.
                 </Text>
             ),
             labels: { confirm: 'Delete Job', cancel: 'Cancel' },
@@ -120,12 +147,36 @@ export function JobsPage() {
         });
     };
 
+    const handleDeleteTask = async (jobId: number, sensor: string) => {
+        modals.openConfirmModal({
+            title: <Title order={3}>Delete Task</Title>,
+            children: (
+                <Text size="sm">
+                    Are you sure you want to delete this task? This action cannot be undone.
+                </Text>
+            ),
+            labels: { confirm: 'Delete Task', cancel: 'Cancel' },
+            confirmProps: { color: 'red' },
+            onConfirm: async () => {
+                try {
+                    await apiService.deleteTask(jobId, sensor);
+                    await loadJobs();
+                } catch (err: any) {
+                    setError(err.error || 'Failed to delete task');
+                }
+            },
+        });
+    };
+
     const handleRunSimilar = (job: Job) => {
         navigate('/dashboard', { state: { jobTemplate: job } });
     };
 
-    const handleViewAnalysis = (jobId: number) => {
-        navigate(`/jobs/${jobId}/analysis`);
+    const handleViewAnalysis = (jobId: number, sensor?: string) => {
+        const path = sensor ? 
+            `/jobs/${jobId}/tasks/${sensor}/analysis` :
+            `/jobs/${jobId}/analysis`;
+        navigate(path);
     };
 
     const getStatusColor = (status: string) => {
@@ -136,8 +187,17 @@ export function JobsPage() {
             'Cancelled': 'gray',
             'Failed': 'red',
             'Incomplete': 'red',
+            'Retrieving': 'cyan',
         };
         return colors[status] || 'gray';
+    };
+
+    const toggleJobExpanded = (jobId: number) => {
+        setExpandedJobIds(prev => 
+            prev.includes(jobId) 
+                ? prev.filter(id => id !== jobId)
+                : [...prev, jobId]
+        );
     };
 
     // Filter jobs based on current filters
@@ -145,7 +205,7 @@ export function JobsPage() {
         return (
             (!filters.username || job.username.toLowerCase().includes(filters.username.toLowerCase())) &&
             (!filters.status || job.status === filters.status) &&
-            (!filters.sensor || job.sensor.toLowerCase().includes(filters.sensor.toLowerCase())) &&
+            (!filters.sensor || job.tasks.some(task => task.sensor.toLowerCase().includes(filters.sensor.toLowerCase()))) &&
             (!filters.description || job.description.toLowerCase().includes(filters.description.toLowerCase()))
         );
     });
@@ -164,9 +224,54 @@ export function JobsPage() {
         });
     };
 
-    const handleJobClick = (job: Job) => {
-        setSelectedJob(job);
-    };
+    const renderTaskRow = (task: Task, jobId: number) => (
+        <Table.Tr key={`${jobId}-${task.sensor}`} style={{ backgroundColor: 'rgba(0,0,0,0.03)' }}>
+            <Table.Td colSpan={2} pl={40}>
+                <Group>
+                    <Text>Sensor: {task.sensor}</Text>
+                    <Badge color={getStatusColor(task.status)}>{task.status}</Badge>
+                </Group>
+            </Table.Td>
+            <Table.Td>{task.result || '-'}</Table.Td>
+            <Table.Td colSpan={2}>{task.filename || '-'}</Table.Td>
+            <Table.Td>{task.completed || '-'}</Table.Td>
+            <Table.Td>{task.analysis || '-'}</Table.Td>
+            <Table.Td>
+                <Group>
+                    {task.status === 'Running' && (
+                        <Tooltip label="Cancel Task">
+                            <ActionIcon 
+                                color="red" 
+                                onClick={() => handleCancelTask(jobId, task.sensor)}
+                                disabled={!canModifyJob(job)}
+                            >
+                                <IconPlayerStop size={16} />
+                            </ActionIcon>
+                        </Tooltip>
+                    )}
+                    {task.status === 'Complete' && task.analysis && (
+                        <Tooltip label="View Analysis">
+                            <ActionIcon 
+                                color="blue" 
+                                onClick={() => handleViewAnalysis(jobId, task.sensor)}
+                            >
+                                <IconFileAnalytics size={16} />
+                            </ActionIcon>
+                        </Tooltip>
+                    )}
+                    <Tooltip label="Delete Task">
+                        <ActionIcon 
+                            color="red" 
+                            onClick={() => handleDeleteTask(jobId, task.sensor)}
+                            disabled={!canModifyJob(job)}
+                        >
+                            <IconTrash size={16} />
+                        </ActionIcon>
+                    </Tooltip>
+                </Group>
+            </Table.Td>
+        </Table.Tr>
+    );
 
     return (
         <div style={{ position: 'relative' }}>
@@ -239,237 +344,106 @@ export function JobsPage() {
                     <Table striped highlightOnHover>
                         <Table.Thead>
                             <Table.Tr>
+                                <Table.Th></Table.Th>
                                 <Table.Th>ID</Table.Th>
                                 <Table.Th>Status</Table.Th>
                                 <Table.Th>Description</Table.Th>
                                 <Table.Th>Time Range</Table.Th>
                                 <Table.Th>Source IP</Table.Th>
                                 <Table.Th>Dest IP</Table.Th>
-                                <Table.Th>Sensor</Table.Th>
-                                <Table.Th>Result</Table.Th>
                                 <Table.Th>Actions</Table.Th>
                             </Table.Tr>
                         </Table.Thead>
                         <Table.Tbody>
                             {paginatedJobs.map((job) => (
-                                <Table.Tr 
-                                    key={job.id}
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => handleJobClick(job)}
-                                >
-                                    <Table.Td>{job.id}</Table.Td>
-                                    <Table.Td>
-                                        <Badge color={getStatusColor(job.status)}>
-                                            {job.status}
-                                        </Badge>
-                                    </Table.Td>
-                                    <Table.Td>
-                                        <Text lineClamp={1}>{job.description}</Text>
-                                    </Table.Td>
-                                    <Table.Td>
-                                        <Stack gap={1}>
-                                            <Text size="sm">Start: {job.start_time ? new Date(job.start_time).toLocaleString() : '-'}</Text>
-                                            <Text size="sm">End: {job.end_time ? new Date(job.end_time).toLocaleString() : '-'}</Text>
-                                        </Stack>
-                                    </Table.Td>
-                                    <Table.Td>
-                                        <Text ff="monospace">{job.src_ip || '-'}</Text>
-                                    </Table.Td>
-                                    <Table.Td>
-                                        <Text ff="monospace">{job.dst_ip || '-'}</Text>
-                                    </Table.Td>
-                                    <Table.Td>{job.sensor}</Table.Td>
-                                    <Table.Td>
-                                        <Text size="sm">{formatBytes(job.result || '-')}</Text>
-                                    </Table.Td>
-                                    <Table.Td onClick={(e) => e.stopPropagation()}>
-                                        <Group gap="xs">
-                                            {/* Anyone can run similar */}
-                                            <Tooltip label="Run Similar">
-                                                <ActionIcon
-                                                    variant="subtle"
-                                                    color="blue"
-                                                    onClick={() => handleRunSimilar(job)}
-                                                >
-                                                    <IconPlayerPlay size={16} />
-                                                </ActionIcon>
-                                            </Tooltip>
-
-                                            {/* Anyone can view analysis if complete */}
-                                            {job.status === 'Complete' && (
-                                                <Tooltip label="View Analysis">
-                                                    <ActionIcon
-                                                        variant="subtle"
-                                                        color="blue"
-                                                        onClick={() => handleViewAnalysis(job.id)}
+                                <>
+                                    <Table.Tr key={job.id}>
+                                        <Table.Td>
+                                            <ActionIcon
+                                                onClick={() => toggleJobExpanded(job.id)}
+                                                variant="subtle"
+                                            >
+                                                {expandedJobIds.includes(job.id) ? 
+                                                    <IconChevronDown size={16} /> : 
+                                                    <IconChevronRight size={16} />
+                                                }
+                                            </ActionIcon>
+                                        </Table.Td>
+                                        <Table.Td>{job.id}</Table.Td>
+                                        <Table.Td>
+                                            <Badge color={getStatusColor(job.status)}>
+                                                {job.status}
+                                            </Badge>
+                                        </Table.Td>
+                                        <Table.Td>{job.description}</Table.Td>
+                                        <Table.Td>
+                                            {new Date(job.start_time).toLocaleString()} -<br/>
+                                            {new Date(job.end_time).toLocaleString()}
+                                        </Table.Td>
+                                        <Table.Td>{job.src_ip}</Table.Td>
+                                        <Table.Td>{job.dst_ip}</Table.Td>
+                                        <Table.Td>
+                                            <Group>
+                                                {job.status === 'Running' && (
+                                                    <Tooltip label="Cancel Job">
+                                                        <ActionIcon 
+                                                            color="red" 
+                                                            onClick={() => handleCancelJob(job.id)}
+                                                            disabled={!canModifyJob(job)}
+                                                        >
+                                                            <IconPlayerStop size={16} />
+                                                        </ActionIcon>
+                                                    </Tooltip>
+                                                )}
+                                                <Tooltip label="Run Similar Job">
+                                                    <ActionIcon 
+                                                        color="blue" 
+                                                        onClick={() => handleRunSimilar(job)}
                                                     >
-                                                        <IconFileAnalytics size={16} />
+                                                        <IconPlayerPlay size={16} />
                                                     </ActionIcon>
                                                 </Tooltip>
-                                            )}
-
-                                            {/* Owner or admin can cancel if Running/Submitted */}
-                                            {canModifyJob(job) && (job.status === 'Running' || job.status === 'Submitted') && (
-                                                <Tooltip label="Cancel Job">
-                                                    <ActionIcon
-                                                        variant="subtle"
-                                                        color="red"
-                                                        onClick={() => handleCancelJob(job.id)}
-                                                    >
-                                                        <IconPlayerStop size={16} />
-                                                    </ActionIcon>
-                                                </Tooltip>
-                                            )}
-
-                                            {/* Owner or admin can delete if Complete/Cancelled/Failed/Incomplete */}
-                                            {canModifyJob(job) && ['Complete', 'Cancelled', 'Failed', 'Incomplete'].includes(job.status) && (
+                                                {job.status === 'Complete' && (
+                                                    <Tooltip label="View Combined Analysis">
+                                                        <ActionIcon 
+                                                            color="blue" 
+                                                            onClick={() => handleViewAnalysis(job.id)}
+                                                        >
+                                                            <IconFileAnalytics size={16} />
+                                                        </ActionIcon>
+                                                    </Tooltip>
+                                                )}
                                                 <Tooltip label="Delete Job">
-                                                    <ActionIcon
-                                                        variant="subtle"
-                                                        color="red"
+                                                    <ActionIcon 
+                                                        color="red" 
                                                         onClick={() => handleDeleteJob(job.id)}
+                                                        disabled={!canModifyJob(job)}
                                                     >
                                                         <IconTrash size={16} />
                                                     </ActionIcon>
                                                 </Tooltip>
-                                            )}
-                                        </Group>
-                                    </Table.Td>
-                                </Table.Tr>
+                                            </Group>
+                                        </Table.Td>
+                                    </Table.Tr>
+                                    {expandedJobIds.includes(job.id) && job.tasks.map(task => 
+                                        renderTaskRow(task, job.id)
+                                    )}
+                                </>
                             ))}
                         </Table.Tbody>
                     </Table>
                 </Box>
 
                 {totalPages > 1 && (
-                    <Group justify="center" mt="md" mb="sm">
+                    <Group justify="center" mt="md">
                         <Pagination
+                            total={totalPages}
                             value={currentPage}
                             onChange={setCurrentPage}
-                            total={totalPages}
                         />
                     </Group>
                 )}
             </Paper>
-
-            {/* Job Details Modal */}
-            <Modal
-                opened={!!selectedJob}
-                onClose={() => setSelectedJob(null)}
-                title={<Title order={3}>Job Details</Title>}
-                size="lg"
-            >
-                {selectedJob && (
-                    <Grid>
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">ID:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.id}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Status:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Badge color={getStatusColor(selectedJob.status)}>
-                                {selectedJob.status}
-                            </Badge>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Description:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.description}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Start Time:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.start_time ? new Date(selectedJob.start_time).toLocaleString() : '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">End Time:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.end_time ? new Date(selectedJob.end_time).toLocaleString() : '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Event Time:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.event_time ? new Date(selectedJob.event_time).toLocaleString() : '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Source IP:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text ff="monospace">{selectedJob.src_ip || '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Destination IP:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text ff="monospace">{selectedJob.dst_ip || '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Sensor:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.sensor}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Result:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{formatBytes(selectedJob.result || '-')}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Started:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.started ? new Date(selectedJob.started).toLocaleString() : '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Completed:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.completed ? new Date(selectedJob.completed).toLocaleString() : '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Filename:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.filename || '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Timezone:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.tz || '-'}</Text>
-                        </Grid.Col>
-
-                        <Grid.Col span={8}>
-                            <Text fw={500} ta="right">Owner:</Text>
-                        </Grid.Col>
-                        <Grid.Col span={16}>
-                            <Text>{selectedJob.username}</Text>
-                        </Grid.Col>
-                    </Grid>
-                )}
-            </Modal>
         </div>
     );
 } 

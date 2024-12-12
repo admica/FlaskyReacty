@@ -163,7 +163,7 @@ def sensor_thread(sensor: str):
                             analysis = None
 
                         # Update task completion
-                        db("UPDATE tasks SET result=%s, filename=%s, status=%s, completed=date_trunc('second', NOW()), analysis=%s WHERE job_id=%s AND sensor=%s",
+                        db("UPDATE tasks SET result_message=%s, filename=%s, status=%s, completed=date_trunc('second', NOW()), analysis=%s WHERE job_id=%s AND sensor=%s",
                            (result, filename, STATUS['Complete'], analysis, job_id_num, sensor_name))
                         xlogger[sensor].info(f'Task: task_id={task_id} Complete.')
 

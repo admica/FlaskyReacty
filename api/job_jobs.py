@@ -185,14 +185,22 @@ def submit_job():
         logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to submit job"}), 500
 
-@jobs_bp.route('/api/v1/jobs', methods=['POST'])
+@jobs_bp.route('/api/v1/jobs', methods=['GET'])
 @jwt_required()
 @rate_limit()
 def get_jobs():
-    """Get jobs with JSON-based optional filtering"""
+    """Get jobs with optional query parameters for filtering"""
     try:
-        # Get filter criteria from JSON body
-        filters = request.get_json() or {}
+        # Get filter criteria from query parameters
+        filters = {}
+        if request.args.get('username'):
+            filters['username'] = request.args.get('username')
+        if request.args.get('start_time'):
+            filters['start_time'] = request.args.get('start_time')
+        if request.args.get('end_time'):
+            filters['end_time'] = request.args.get('end_time')
+        if request.args.get('status'):
+            filters['status'] = request.args.get('status')
 
         # Build query conditions and parameters
         conditions = ["1=1"]  # Always true condition to start

@@ -18,7 +18,7 @@ ALTER TYPE public.job_status OWNER TO pcapuser;
 CREATE TYPE public.task_status AS ENUM (
     'Submitted',
     'Running',
-    'Downloading',
+    'Retrieving',
     'Complete',
     'Failed',
     'Skipped',
