@@ -14,8 +14,8 @@ from api.auth import get_user_role
 from api.sensor_threads import sensor_queues, sensor_threads, Thread, sensor_thread
 
 # Constants for event time calculations
-EVENT_START_BEFORE = 15  # minutes before event time
-EVENT_END_AFTER = 15     # minutes after event time
+EVENT_START_BEFORE = 1  # minutes before event time
+EVENT_END_AFTER = 4     # minutes after event time
 
 # Shared paths configuration
 try:
@@ -41,9 +41,9 @@ def process_job_submission(
     sensor: str,
     src_ip: str,
     dst_ip: str,
-    start_time: str,
-    end_time: str,
-    description: str,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    description: str = "",
     event_time: Optional[str] = None,
     tz: str = '+00:00'
 ) -> Dict[str, Union[Tuple, None]]:
@@ -55,8 +55,8 @@ def process_job_submission(
         sensor: Target sensor name
         src_ip: Source IP address
         dst_ip: Destination IP address
-        start_time: Job start time
-        end_time: Job end time
+        start_time: Optional job start time
+        end_time: Optional job end time
         description: Job description
         event_time: Optional event time
         tz: Timezone offset (default: '+00:00')
@@ -72,22 +72,28 @@ def process_job_submission(
     )
 
     try:
-        # Convert times to UTC for validation and epoch conversion
-        utc_start_time = parse_and_convert_to_utc(start_time, tz)
-        utc_end_time = parse_and_convert_to_utc(end_time, tz)
+        # Convert provided times to UTC
         utc_event_time = parse_and_convert_to_utc(event_time, tz) if event_time else None
+        utc_start_time = parse_and_convert_to_utc(start_time, tz) if start_time else None
+        utc_end_time = parse_and_convert_to_utc(end_time, tz) if end_time else None
 
-        # Handle event time logic
+        # Handle time calculations based on provided values
         if utc_event_time:
+            # Calculate start_time if not provided
             if not utc_start_time:
                 utc_start_time = utc_event_time - timedelta(minutes=EVENT_START_BEFORE)
+            
+            # Calculate end_time if not provided
             if not utc_end_time:
                 utc_end_time = utc_event_time + timedelta(minutes=EVENT_END_AFTER)
+        else:
+            # If no event_time, both start and end times must be provided
+            if not utc_start_time or not utc_end_time:
+                raise ValueError("Both start_time and end_time must be provided when event_time is not specified")
 
-        if not utc_start_time:
-            raise ValueError("Invalid start time format")
-        if not utc_end_time:
-            raise ValueError("Invalid end time format")
+        # Validate time values
+        if utc_end_time <= utc_start_time:
+            raise ValueError("End time must be after start time")
 
         # Prepare job data
         job_data = {
@@ -98,9 +104,7 @@ def process_job_submission(
             'dst_ip': dst_ip,
             'event_time': utc_event_time,
             'start_time': utc_start_time,
-            'end_time': utc_end_time,
-            'status': STATUS['Submitted'],
-            'tz': tz
+            'end_time': utc_end_time
         }
 
         return {

@@ -36,7 +36,7 @@ def submit_job():
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        # Extract required fields
+        # Extract fields
         location = data.get('location')
         src_ip = data.get('src_ip', '').strip()
         dst_ip = data.get('dst_ip', '').strip()
@@ -94,82 +94,41 @@ def submit_job():
             logger.error(f"No active sensors available for location: {location}")
             return jsonify({"error": f"No active sensors found for location: {location}"}), 400
 
-        # Process time parameters
-        logger.debug("Processing time parameters")
-        if event_time:
-            utc_event_time = parse_and_convert_to_utc(event_time, tz)
-            utc_start_time = utc_event_time.replace(second=0, microsecond=0)
-            utc_start_time = utc_start_time.replace(minute=utc_start_time.minute - 1)
-            utc_end_time = utc_event_time.replace(second=59, microsecond=999999)
-            utc_end_time = utc_end_time.replace(minute=utc_end_time.minute + 4)
-            logger.info(f"Using event time {event_time}, calculated window: {utc_start_time} to {utc_end_time}")
-        else:
-            utc_start_time = parse_and_convert_to_utc(start_time, tz)
-            utc_end_time = parse_and_convert_to_utc(end_time, tz)
-            utc_event_time = None
-            logger.info(f"Using explicit time window: {utc_start_time} to {utc_end_time}")
+        # Process job submission with new time handling
+        result = process_job_submission(
+            username=username,
+            sensor=active_sensors[0][0],  # Use first active sensor
+            src_ip=src_ip,
+            dst_ip=dst_ip,
+            start_time=start_time,
+            end_time=end_time,
+            description=description,
+            event_time=event_time,
+            tz=tz
+        )
 
-        # Create the job
-        logger.debug("Creating job record")
+        if result.get('error'):
+            logger.error(f"Job submission failed: {result['error']}")
+            return jsonify({"error": result['error']}), 400
+
+        # Create job record
+        job_data = result['data']
         job_id = db("""
-            INSERT INTO jobs
-            (location, description, source_ip, dest_ip, event_time,
-             start_time, end_time, status, submitted_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'Submitted', %s)
-            RETURNING id
-        """, (location, description, src_ip or None, dst_ip or None,
-              utc_event_time, utc_start_time, utc_end_time, username))
+            INSERT INTO jobs (
+                location, description, source_ip, dest_ip,
+                event_time, start_time, end_time, status,
+                submitted_by
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, 'Submitted', %s
+            ) RETURNING id
+        """, (
+            location, description, src_ip, dst_ip,
+            job_data['event_time'], job_data['start_time'],
+            job_data['end_time'], username
+        ), fetch_one=True)[0]
 
-        if not job_id:
-            logger.error("Failed to create job record")
-            return jsonify({"error": "Failed to create job"}), 500
-
-        job_id = job_id[0]
-        logger.info(f"Created job {job_id}")
-
-        # Create tasks for each active sensor
-        tasks_created = 0
-        tasks_queued = 0
-        for sensor in active_sensors:
-            logger.debug(f"Creating task for sensor: {sensor[0]}")
-            task_id = db("""
-                INSERT INTO tasks
-                (job_id, sensor, status)
-                VALUES (%s, %s, 'Submitted')
-                RETURNING id
-            """, (job_id, sensor[0]))
-
-            if task_id:
-                tasks_created += 1
-                # Add task to sensor's queue
-                if sensor[0] in sensor_queues:
-                    # Convert times to epochs for the run_job.py script
-                    start_epoch = int(utc_start_time.timestamp())
-                    end_epoch = int(utc_end_time.timestamp())
-
-                    # Queue format: "<job_id>_<task_id>"
-                    task_identifier = f"{job_id}_{task_id[0]}"
-                    sensor_queues[sensor[0]].put([
-                        task_identifier,
-                        start_epoch,
-                        end_epoch,
-                        'pcap',  # Default request type
-                        src_ip or '',
-                        dst_ip or ''
-                    ])
-                    tasks_queued += 1
-                    logger.info(f"Queued task {task_identifier} for sensor {sensor[0]}")
-                else:
-                    logger.warning(f"Sensor {sensor[0]} has no queue, task created but not queued")
-
-        logger.info(f"Job {job_id} setup complete: {tasks_created} tasks created, {tasks_queued} tasks queued")
-        return jsonify({
-            "message": "Job submitted successfully",
-            "job_id": job_id,
-            "tasks_created": tasks_created,
-            "tasks_queued": tasks_queued,
-            "offline_sensors": offline_sensors if offline_sensors else None
-        }), 201
+        logger.info(f"Created job {job_id} for user {username}")
+        return jsonify({"job_id": job_id}), 201
 
     except Exception as e:
         logger.error(f"Error submitting job: {e}")

@@ -255,37 +255,74 @@ class ApiTester:
         return result
 
     def test_submit_job(self):
-        """Test job submission"""
+        """Test job submission with various time combinations"""
         console.print("\n[bold]Testing Job Submission[/bold]")
 
         if not hasattr(self, 'first_sensor') or not self.first_sensor:
             console.print("[yellow]Skipping job submission test - no sensor available[/yellow]")
             return
 
-        start_time = (datetime.now(timezone.utc) - timedelta(minutes=10))
-        end_time = datetime.now(timezone.utc)
-
+        # Test case 1: Submit with event_time only
+        event_time = datetime.now(timezone.utc)
         job_data = {
-            "sensor": self.first_sensor,
-            "src_ip": "192.168.1.1", # Using common test IPs
-            "dst_ip": "10.0.0.1",
-            "description": "API Test Job",
+            "location": self.first_sensor,
+            "src_ip": "192.168.1.1",
+            "description": "API Test Job - Event Time Only",
+            "event_time": event_time.isoformat(),
+            "tz": "+00:00"
+        }
+        result1 = self.run_test("Submit job with event_time only", "POST", "/api/v1/submit",
+                               data=job_data, expected_status=201)
+
+        # Test case 2: Submit with event_time and start_time
+        start_time = event_time - timedelta(minutes=5)
+        job_data = {
+            "location": self.first_sensor,
+            "src_ip": "192.168.1.1",
+            "description": "API Test Job - Event Time + Start Time",
+            "event_time": event_time.isoformat(),
+            "start_time": start_time.isoformat(),
+            "tz": "+00:00"
+        }
+        result2 = self.run_test("Submit job with event_time and start_time", "POST",
+                               "/api/v1/submit", data=job_data, expected_status=201)
+
+        # Test case 3: Submit with event_time and end_time
+        end_time = event_time + timedelta(minutes=10)
+        job_data = {
+            "location": self.first_sensor,
+            "src_ip": "192.168.1.1",
+            "description": "API Test Job - Event Time + End Time",
+            "event_time": event_time.isoformat(),
+            "end_time": end_time.isoformat(),
+            "tz": "+00:00"
+        }
+        result3 = self.run_test("Submit job with event_time and end_time", "POST",
+                               "/api/v1/submit", data=job_data, expected_status=201)
+
+        # Test case 4: Submit with start_time and end_time
+        job_data = {
+            "location": self.first_sensor,
+            "src_ip": "192.168.1.1",
+            "description": "API Test Job - Start Time + End Time",
             "start_time": start_time.isoformat(),
             "end_time": end_time.isoformat(),
             "tz": "+00:00"
         }
+        result4 = self.run_test("Submit job with start_time and end_time", "POST",
+                               "/api/v1/submit", data=job_data, expected_status=201)
 
-        result = self.run_test("Submit new job", "POST", "/api/v1/submit", data=job_data, expected_status=201)
+        # Store the last job ID from any successful submission
+        for result in [result4, result3, result2, result1]:
+            if result and result['success']:
+                self.last_job_id = result['response'].get('job_id')
+                if self.last_job_id:
+                    console.print(f"[green]Successfully submitted job with ID: {self.last_job_id}[/green]")
+                    break
+                else:
+                    console.print("[red]Error: No job ID in response[/red]")
 
-        from time import sleep
-        sleep(30)
-        if result and result['success']:
-            self.last_job_id = result['response'].get('job_id')
-            if self.last_job_id:
-                console.print(f"[green]Successfully submitted job with ID: {self.last_job_id}[/green]")
-            else:
-                console.print("[red]Error: No job ID in response[/red]")
-        return result
+        return result4  # Return the last result for consistency
 
     def test_get_job(self):
         """Test getting a specific job's details"""
