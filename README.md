@@ -197,3 +197,6 @@ npm run build
 - Regular security audits
 - Compliance with industry standards
 
+# Proprietary License
+
+This repository contains proprietary software. Unauthorized use, distribution, or reproduction is strictly prohibited. All rights reserved.
