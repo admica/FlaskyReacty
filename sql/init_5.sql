@@ -72,11 +72,6 @@ CREATE TABLE public.jobs (
     last_modified timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT jobs_pkey PRIMARY KEY (id),
     CONSTRAINT jobs_location_fkey FOREIGN KEY (location) REFERENCES locations(site),
-    CONSTRAINT jobs_submitted_by_fkey FOREIGN KEY (submitted_by) REFERENCES admin_users(username),
-    CONSTRAINT jobs_aborted_by_fkey FOREIGN KEY (aborted_by) REFERENCES admin_users(username),
-    CONSTRAINT jobs_time_check CHECK (
-        (event_time IS NOT NULL) OR 
-        (start_time IS NOT NULL AND end_time IS NOT NULL)
     )
 );
 
