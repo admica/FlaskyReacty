@@ -708,7 +708,7 @@ class ApiTester:
                 with conn.cursor() as cur:
                     # Get a real subnet mapping pair
                     cur.execute("""
-                        SELECT 
+                        SELECT
                             src_subnet,
                             dst_subnet,
                             src_location,

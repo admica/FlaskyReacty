@@ -169,13 +169,13 @@ class SensorMonitor:
             'user': self.config['DB']['username'],
             'password': self.config['DB']['password']
         }
-        logger.debug(f"Database parameters: host={self.db_params['host']}, db={self.db_params['database']}, user={self.db_params['user']}")
+        #logger.debug(f"Database parameters: host={self.db_params['host']}, db={self.db_params['database']}, user={self.db_params['user']}")
 
         self.status_check_interval = self.config.getint('MONITOR', 'status_check_interval', fallback=60)
         self.info_update_interval = self.config.getint('MONITOR', 'info_update_interval', fallback=300)
         self.pcap_ctrl = self.config.get('SENSOR', 'pcapCtrl', fallback='/opt/pcapserver/bin/pcapCtrl')
         logger.debug(f"Monitor intervals: status={self.status_check_interval}s, info={self.info_update_interval}s")
-        logger.debug(f"Using pcapCtrl at: {self.pcap_ctrl}")
+        #logger.debug(f"Using pcapCtrl at: {self.pcap_ctrl}")
 
         self.running = True
 
@@ -261,8 +261,7 @@ class SensorMonitor:
                 logger.debug(f"Raw device stats: {stats}")
 
                 # Convert location to uppercase if present
-                if 'Location' in stats:
-                    stats['Location'] = stats['Location'].upper()
+                if 'Location' in stats: stats['Location'] = stats['Location'].upper()
 
             except json.JSONDecodeError:
                 logger.error(f"Invalid JSON from pcapCtrl: {result.stdout}")
@@ -713,12 +712,12 @@ class SensorMonitor:
                     psycopg2.extras.execute_values(
                         cur,
                         f"""
-                        INSERT INTO "loc_src_{location}"
+                        INSERT INTO loc_src_{location}
                             (subnet, count, first_seen, last_seen, sensor, device)
                         VALUES %s
                         ON CONFLICT (subnet, sensor, device) DO UPDATE
-                        SET count = "loc_src_{location}".count + EXCLUDED.count,
-                            last_seen = GREATEST("loc_src_{location}".last_seen, EXCLUDED.last_seen)
+                        SET count = loc_src_{location}.count + EXCLUDED.count,
+                            last_seen = GREATEST(loc_src_{location}.last_seen, EXCLUDED.last_seen)
                         """,
                         src_values
                     )
@@ -741,12 +740,12 @@ class SensorMonitor:
                     psycopg2.extras.execute_values(
                         cur,
                         f"""
-                        INSERT INTO "loc_dst_{location}"
+                        INSERT INTO loc_dst_{location}
                             (subnet, count, first_seen, last_seen, sensor, device)
                         VALUES %s
                         ON CONFLICT (subnet, sensor, device) DO UPDATE
-                        SET count = "loc_dst_{location}".count + EXCLUDED.count,
-                            last_seen = GREATEST("loc_dst_{location}".last_seen, EXCLUDED.last_seen)
+                        SET count = loc_dst_{location}.count + EXCLUDED.count,
+                            last_seen = GREATEST(loc_dst_{location}.last_seen, EXCLUDED.last_seen)
                         """,
                         dst_values
                     )

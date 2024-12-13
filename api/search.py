@@ -166,7 +166,7 @@ def search_ip():
                 dst_matches = []
 
                 # Search source table for this location
-                src_table = f'"loc_src_{loc}"'
+                src_table = f'loc_src_{loc}'
                 try:
                     src_rows = db(f"""
                         SELECT subnet, count, first_seen, last_seen, sensor, device
@@ -179,7 +179,7 @@ def search_ip():
                     continue
 
                 # Search destination table for this location
-                dst_table = f'"loc_dst_{loc}"'
+                dst_table = f'loc_dst_{loc}'
                 try:
                     dst_rows = db(f"""
                         SELECT subnet, count, first_seen, last_seen, sensor, device

@@ -127,7 +127,12 @@ def initialize_sensors_from_config():
         raise
 
 def initialize_locations_from_config():
-    """Initialize locations from config.ini if they don't exist in database"""
+    """Initialize locations from config.ini if they don't exist in database.
+    
+    Note:
+        Locations are stored with uppercase site identifiers in the locations table,
+        but their associated dynamic tables (loc_src_*, loc_dst_*) use lowercase names.
+    """
     try:
         logger.info("Initializing locations from config.ini")
 
@@ -143,8 +148,8 @@ def initialize_locations_from_config():
                 # Parse the JSON-like string into a dict
                 location_info = eval(location_data)  # Safe here as we control the config file
 
-                # Add site from config key
-                location_info['site'] = site.upper()
+                # Always store site in uppercase for consistency
+                location_info['site'] = site.strip().upper()
 
                 # Validate required fields
                 required_fields = ['name', 'latitude', 'longitude']  # site is already handled
@@ -227,12 +232,21 @@ def on_blueprint_init(state):
         # Don't raise the error - allow the app to start even if initialization fails
 
 def create_location_tables(cur, location):
-    """Create source and destination subnet tables for a location if they don't exist"""
+    """Create source and destination subnet tables for a location if they don't exist.
+    
+    Args:
+        cur: Database cursor
+        location: Location identifier (will be converted to lowercase for table names)
+        
+    Note:
+        This function always creates tables with lowercase names for PostgreSQL compatibility,
+        regardless of the input case. The application should handle display case separately.
+    """
     try:
-        # Just strip whitespace
-        location = location.strip()
-        if not location:
-            return False, "Location name cannot be empty"
+        # Always use lowercase for table names (PostgreSQL best practice)
+        # Strip whitespace to prevent edge cases
+        location = location.strip().lower()
+        if not location: return False, "Location name cannot be empty"
 
         # Validate location name format (alphanumeric and underscores only)
         if not all(c.isalnum() or c == '_' for c in location):
@@ -241,11 +255,9 @@ def create_location_tables(cur, location):
         logger.info(f"Checking/Creating location tables for {location}")
 
         # Check if tables already exist
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s)",
-                   (f'loc_src_{location}',))
+        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s)", (f'loc_src_{location}',))
         src_exists = cur.fetchone()[0]
-        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s)",
-                   (f'loc_dst_{location}',))
+        cur.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = %s)", (f'loc_dst_{location}',))
         dst_exists = cur.fetchone()[0]
 
         # Create source subnet table if it doesn't exist
@@ -318,9 +330,11 @@ def create_location_tables(cur, location):
 def analyze_location_tables(cur, location):
     """Analyze tables for better query planning"""
     try:
+        # Convert location to lowercase
+        location = location.strip().lower()
         logger.info(f"Analyzing location tables for {location}")
         for prefix in ['src', 'dst']:
-            table_name = f'"loc_{prefix}_{location}"'
+            table_name = f'loc_{prefix}_{location}'
             cur.execute(f"ANALYZE VERBOSE {table_name}")
         logger.info(f"Completed analysis of location tables for {location}")
         return True
@@ -331,11 +345,13 @@ def analyze_location_tables(cur, location):
 def vacuum_location_tables(cur, location):
     """Vacuum tables after large deletes"""
     try:
+        # Convert location to lowercase
+        location = location.strip().lower()
         logger.info(f"Vacuuming location tables for {location}")
         # Need to be outside a transaction for vacuum
         cur.execute("COMMIT")
         for prefix in ['src', 'dst']:
-            table_name = f'"loc_{prefix}_{location}"'
+            table_name = f'loc_{prefix}_{location}'
             cur.execute(f"VACUUM ANALYZE {table_name}")
         logger.info(f"Completed vacuum of location tables for {location}")
         return True
@@ -346,6 +362,8 @@ def vacuum_location_tables(cur, location):
 def check_table_bloat(cur, location):
     """Check and warn about table bloat"""
     try:
+        # Convert location to lowercase
+        location = location.strip().lower()
         for prefix in ['src', 'dst']:
             table_name = f'loc_{prefix}_{location}'
             quoted_table = f'"{table_name}"'
@@ -386,13 +404,13 @@ def drop_location_tables(cur, location):
         # Drop source subnet table if exists
         logger.debug(f"Dropping source subnet table loc_src_{location}")
         cur.execute(f"""
-            DROP TABLE IF EXISTS "loc_src_{location}";
+            DROP TABLE IF EXISTS loc_src_{location};
         """)
 
         # Drop destination subnet table if exists
         logger.debug(f"Dropping destination subnet table loc_dst_{location}")
         cur.execute(f"""
-            DROP TABLE IF EXISTS "loc_dst_{location}";
+            DROP TABLE IF EXISTS loc_dst_{location};
         """)
 
         # Commit transaction
@@ -541,7 +559,7 @@ def add_sensor():
 
         name = data['name']
         fqdn = data['fqdn']
-        location = data['location']
+        location = data['location'].upper() # Convert to uppercase
         devices = data['devices']
 
         # Validate sensor name format
@@ -866,7 +884,11 @@ def get_sensor_devices(sensor_name):
 @jwt_required()
 @rate_limit()
 def get_locations():
-    """Get all locations"""
+    """Get all locations.
+    
+    Returns locations with uppercase site identifiers for display purposes.
+    The actual database tables for each location use lowercase names internally.
+    """
     try:
         # Try to get from cache first
         cache_key = get_cache_key('locations', 'all')
@@ -885,7 +907,7 @@ def get_locations():
                 logger.warning("Corrupted cache data for locations")
                 redis_client.delete(cache_key)
 
-        # Get locations from database
+        # Get locations from database (sites are already stored uppercase)
         locations = db("""
             SELECT site, name, latitude, longitude, description, color
             FROM locations
@@ -896,9 +918,9 @@ def get_locations():
             logger.error("Database query returned None for locations")
             return jsonify({"error": "Database error"}), 500
 
-        # Format the response
+        # Format the response (site is already uppercase from database)
         location_list = [{
-            'site': loc[0],
+            'site': loc[0],  # Already uppercase from database
             'name': loc[1],
             'latitude': float(loc[2]),
             'longitude': float(loc[3]),

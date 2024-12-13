@@ -178,7 +178,7 @@ def get_subnet_mappings():
                 AND dst_location = %s
                 AND last_seen >= EXTRACT(EPOCH FROM NOW() - INTERVAL '24 hours')::bigint
             """
-            
+
             try:
                 rows = db(query, [src_subnet, dst_subnet, src_loc_canonical, dst_loc_canonical])
                 mappings = [{
