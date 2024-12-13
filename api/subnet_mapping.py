@@ -40,7 +40,7 @@ def is_valid_location(location: str) -> bool:
             return False
 
         # Then check if location exists in locations table (case insensitive)
-        rows = db("SELECT site FROM locations WHERE UPPER(site) = UPPER(%s)", (location,))
+        rows = db("SELECT site FROM locations WHERE site = %s", (location,))
         return len(rows) > 0
     except Exception as e:
         logger.error(f"Error validating location: {e}")
@@ -146,13 +146,13 @@ def get_subnet_mappings():
         if src_location:
             if not is_valid_location(src_location):
                 return jsonify({"error": "Invalid source location"}), 400
-            rows = db("SELECT site FROM locations WHERE UPPER(site) = UPPER(%s)", (src_location,))
+            rows = db("SELECT site FROM locations WHERE site = %s", (src_location,))
             src_loc_canonical = rows[0][0] if rows else None
 
         if dst_location:
             if not is_valid_location(dst_location):
                 return jsonify({"error": "Invalid destination location"}), 400
-            rows = db("SELECT site FROM locations WHERE UPPER(site) = UPPER(%s)", (dst_location,))
+            rows = db("SELECT site FROM locations WHERE site = %s", (dst_location,))
             dst_loc_canonical = rows[0][0] if rows else None
 
         # Handle subnet search patterns

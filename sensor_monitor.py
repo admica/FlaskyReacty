@@ -638,7 +638,7 @@ class SensorMonitor:
             cur.execute("""
                 SELECT site
                 FROM locations
-                WHERE UPPER(site) = UPPER(%s)
+                WHERE site = %s
             """, (location,))
             src_loc_result = cur.fetchone()
             if not src_loc_result:
@@ -650,8 +650,8 @@ class SensorMonitor:
             cur.execute("""
                 SELECT DISTINCT l.site
                 FROM sensors s
-                JOIN locations l ON UPPER(l.site) = UPPER(s.location)
-                WHERE UPPER(s.location) != UPPER(%s)
+                JOIN locations l ON l.site = s.location
+                WHERE s.location != %s
                 AND s.status != 'Offline'
             """, (location,))
             dst_locations = [row[0] for row in cur.fetchall()]
@@ -678,7 +678,7 @@ class SensorMonitor:
             cur.execute("""
                 SELECT l.site
                 FROM sensors s
-                JOIN locations l ON UPPER(l.site) = UPPER(s.location)
+                JOIN locations l ON l.site = s.location
                 WHERE s.name = %s
             """, (sensor_name,))
             result = cur.fetchone()

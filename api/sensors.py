@@ -229,7 +229,7 @@ def on_blueprint_init(state):
 def create_location_tables(cur, location):
     """Create source and destination subnet tables for a location if they don't exist"""
     try:
-        # Normalize location name for table names
+        # Just strip whitespace
         location = location.strip()
         if not location:
             return False, "Location name cannot be empty"
@@ -252,7 +252,7 @@ def create_location_tables(cur, location):
         if not src_exists:
             logger.debug(f"Creating source subnet table loc_src_{location}")
             cur.execute(f"""
-                CREATE TABLE "loc_src_{location}" (
+                CREATE TABLE loc_src_{location} (
                     subnet cidr NOT NULL,
                     count bigint NOT NULL DEFAULT 0,
                     first_seen bigint NOT NULL,
@@ -262,18 +262,18 @@ def create_location_tables(cur, location):
                     PRIMARY KEY (subnet, sensor, device)
                 );
                 -- GiST index for efficient subnet lookups
-                CREATE INDEX "idx_src_{location}_subnet"
-                ON "loc_src_{location}" USING gist (subnet inet_ops);
+                CREATE INDEX idx_src_{location}_subnet
+                ON loc_src_{location} USING gist (subnet inet_ops);
                 -- Index for time-based queries and pruning
-                CREATE INDEX "idx_src_{location}_time"
-                ON "loc_src_{location}" (last_seen, first_seen);
+                CREATE INDEX idx_src_{location}_time
+                ON loc_src_{location} (last_seen, first_seen);
             """)
 
         # Create destination subnet table if it doesn't exist
         if not dst_exists:
             logger.debug(f"Creating destination subnet table loc_dst_{location}")
             cur.execute(f"""
-                CREATE TABLE "loc_dst_{location}" (
+                CREATE TABLE loc_dst_{location} (
                     subnet cidr NOT NULL,
                     count bigint NOT NULL DEFAULT 0,
                     first_seen bigint NOT NULL,
@@ -283,18 +283,18 @@ def create_location_tables(cur, location):
                     PRIMARY KEY (subnet, sensor, device)
                 );
                 -- GiST index for efficient subnet lookups
-                CREATE INDEX "idx_dst_{location}_subnet"
-                ON "loc_dst_{location}" USING gist (subnet inet_ops);
+                CREATE INDEX idx_dst_{location}_subnet
+                ON loc_dst_{location} USING gist (subnet inet_ops);
                 -- Index for time-based queries and pruning
-                CREATE INDEX "idx_dst_{location}_time"
-                ON "loc_dst_{location}" (last_seen, first_seen);
+                CREATE INDEX idx_dst_{location}_time
+                ON loc_dst_{location} (last_seen, first_seen);
             """)
 
         # Set optimal table storage parameters
         if src_exists or dst_exists:
             for prefix in ['src', 'dst']:
                 cur.execute(f"""
-                    ALTER TABLE "loc_{prefix}_{location}" SET (
+                    ALTER TABLE loc_{prefix}_{location} SET (
                         autovacuum_vacuum_scale_factor = 0.1,
                         autovacuum_analyze_scale_factor = 0.05,
                         autovacuum_vacuum_threshold = 1000,
@@ -556,8 +556,8 @@ def add_sensor():
                 "error": "Invalid FQDN format"
             }), 400
 
-        # Normalize and validate location
-        location = location.lower().replace(' ', '_').strip()
+        # Validate and normalize location
+        location = location.strip()
         if not location:
             return jsonify({
                 "error": "Location cannot be empty"

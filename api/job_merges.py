@@ -31,11 +31,11 @@ def get_subnet_location_counts():
         params = []
 
         if src_location:
-            conditions.append("LOWER(src_location) = LOWER(%s)")
+            conditions.append("src_location = %s")
             params.append(src_location)
 
         if dst_location:
-            conditions.append("LOWER(dst_location) = LOWER(%s)")
+            conditions.append("dst_location = %s")
             params.append(dst_location)
 
         # Build the query

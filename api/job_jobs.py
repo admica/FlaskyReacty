@@ -62,19 +62,17 @@ def submit_job():
             logger.warning(f"Job validation failed: {errors}")
             return jsonify({"error": "Validation failed", "messages": errors}), 400
 
-        # First verify location exists
-        logger.debug(f"Verifying location exists: {location}")
-        loc = db("SELECT site FROM locations WHERE LOWER(site) = LOWER(%s)", (location,))
+        # Validate location exists
+        loc = db("SELECT site FROM locations WHERE site = %s", (location,))
         if not loc:
-            logger.warning(f"Invalid location requested: {location}")
-            return jsonify({"error": f"Invalid location: {location}"}), 400
+            return jsonify({"error": f"Location {location} not found"}), 404
 
-        # Then get all sensors for location
-        logger.debug(f"Getting sensors for location: {location}")
+        # Get all sensors for this location
         sensors = db("""
-            SELECT name, status, fqdn
+            SELECT name, fqdn, status
             FROM sensors
-            WHERE LOWER(location) = LOWER(%s)
+            WHERE location = %s
+            AND status != 'Offline'
         """, (location,))
 
         if not sensors:

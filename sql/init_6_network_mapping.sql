@@ -144,9 +144,9 @@ BEGIN
         packet_count bigint
     ) ON COMMIT DROP;
     
-    -- Build table names safely with double quotes to preserve case
-    v_src_table := format('public."loc_src_%s"', p_src_location);
-    v_dst_table := format('public."loc_dst_%s"', p_dst_location);
+    -- Build table names safely
+    v_src_table := format('public.loc_src_%s', p_src_location);
+    v_dst_table := format('public.loc_dst_%s', p_dst_location);
     
     -- Build dynamic SQL for the location-specific query
     v_sql := format(
