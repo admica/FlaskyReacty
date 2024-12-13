@@ -259,6 +259,11 @@ class SensorMonitor:
             try:
                 stats = json.loads(result.stdout)
                 logger.debug(f"Raw device stats: {stats}")
+
+                # Convert location to uppercase if present
+                if 'Location' in stats:
+                    stats['Location'] = stats['Location'].upper()
+
             except json.JSONDecodeError:
                 logger.error(f"Invalid JSON from pcapCtrl: {result.stdout}")
                 device_stats = self._create_offline_device_stats()
@@ -632,8 +637,10 @@ class SensorMonitor:
 
     def update_subnet_location_map(self, cur, location: str):
         """Update subnet_location_map based on loc_src and loc_dst tables for a location"""
-        logger.debug(f"Updating subnet_location_map for location {location}")
         try:
+            # Convert location to uppercase
+            location = location.strip().upper()
+            logger.debug(f"Updating subnet_location_map for location {location}")
             # Get the canonical location name from locations table
             cur.execute("""
                 SELECT site
