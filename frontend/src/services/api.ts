@@ -483,17 +483,7 @@ const apiService = {
             const response = await api.get('/logs/list');
             return response.data;
         } catch (error: any) {
-            console.error('Log files list error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Log files list error', error);
         }
     },
 
@@ -504,17 +494,7 @@ const apiService = {
             });
             return response.data;
         } catch (error: any) {
-            console.error('Log content error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Log content error', error);
         }
     },
 
@@ -529,17 +509,7 @@ const apiService = {
             });
             return response.data;
         } catch (error: any) {
-            console.error('Log streaming error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Log streaming error', error);
         }
     },
 
@@ -550,17 +520,7 @@ const apiService = {
             console.log('Logs response:', response.data);
             return response.data;
         } catch (error: any) {
-            console.error('Logs fetch error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Logs fetch error', error);
         }
     },
 
