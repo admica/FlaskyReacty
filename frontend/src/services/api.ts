@@ -406,17 +406,7 @@ const apiService = {
             console.log('Health response:', response.data);
             return response.data;
         } catch (error: any) {
-            console.error('Health check error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Health check error', error);
         }
     },
 
@@ -425,17 +415,7 @@ const apiService = {
             const response = await api.get('/version');
             return response.data;
         } catch (error: any) {
-            console.error('Version check error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Version check error', error);
         }
     },
 
@@ -446,17 +426,7 @@ const apiService = {
             console.log('Storage response:', response.data);
             return response.data;
         } catch (error: any) {
-            console.error('Storage check error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Storage check error', error);
         }
     },
 
