@@ -19,10 +19,10 @@ def validate_job_params(data: dict) -> tuple[Optional[dict], Optional[List[str]]
         # Required fields
         location = data.get('location')
         if not location: return None, ['missing:location']
-            
+
         params = data.get('params', {})
         if not params: return None, ['missing:params']
-            
+
         # Build job dictionary
         job = {
             'location': location,
@@ -35,40 +35,40 @@ def validate_job_params(data: dict) -> tuple[Optional[dict], Optional[List[str]]
             'description': params.get('description'),
             'tz': params.get('tz', '+00:00')
         }
-        
+
         # Validate required combinations
         errors = []
-        
+
         if not (job['src_ip'] or job['dst_ip']):
             errors.append('must include src_ip, dst_ip, or both')
-            
+
         # Handle event time calculations
         if job['event_time']:
             event_time = datetime.fromisoformat(job['event_time'].replace('Z', '+00:00'))
-            
+
             if not job['start_time']:
                 offset = config.getint('EVENT', 'start_before', fallback=1)
                 job['start_time'] = (event_time - timedelta(minutes=offset)).isoformat()
-                
+
             if not job['end_time']:
                 offset = config.getint('EVENT', 'end_after', fallback=4)
                 job['end_time'] = (event_time + timedelta(minutes=offset)).isoformat()
-                
+
         # Final time validation
         if not job['start_time']:
             errors.append('missing:start_time')
         if not job['end_time']:
             errors.append('missing:end_time')
-            
+
         if errors:
             return None, errors
-            
+
         # Set default description if none provided
         if not job['description']:
             job['description'] = f"src:{job['src_ip']}->dst:{job['dst_ip']}"
-            
+
         return job, None
-        
+
     except Exception as e:
         logger.error(f"Error validating job params: {e}")
         return None, ['Invalid job parameters']
@@ -78,7 +78,7 @@ def validate_job_params(data: dict) -> tuple[Optional[dict], Optional[List[str]]
 @activity_tracking
 def submit_job():
     """Submit a new PCAP search job for a location.
-    
+
     Expected JSON body:
     {
         "location": "KSC",                        # Required
@@ -96,21 +96,21 @@ def submit_job():
     try:
         data = request.get_json()
         if not data: return jsonify({"error": "No JSON data provided"}), 400
-            
+
         # Validate and process parameters
         job, errors = validate_job_params(data)
         if errors: return jsonify({"errors": errors}), 400
-            
+
         location = job['location']
-            
+
         # Ensure job processor exists and is running
         if location not in job_procs or not job_procs[location].is_alive():
             logger.info(f"Starting new job processor for {location}")
             job_procs[location] = start_job_proc(location)
-            
+
         # Queue the job
         job_queues[location].put(job)
-        
+
         return jsonify({
             "message": "Job submitted successfully",
             "location": location,

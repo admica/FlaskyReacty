@@ -128,7 +128,7 @@ def initialize_sensors_from_config():
 
 def initialize_locations_from_config():
     """Initialize locations from config.ini if they don't exist in database.
-    
+
     Note:
         Locations are stored with uppercase site identifiers in the locations table,
         but their associated dynamic tables (loc_src_*, loc_dst_*) use lowercase names.
@@ -233,11 +233,11 @@ def on_blueprint_init(state):
 
 def create_location_tables(cur, location):
     """Create source and destination subnet tables for a location if they don't exist.
-    
+
     Args:
         cur: Database cursor
         location: Location identifier (will be converted to lowercase for table names)
-        
+
     Note:
         This function always creates tables with lowercase names for PostgreSQL compatibility,
         regardless of the input case. The application should handle display case separately.
@@ -885,7 +885,7 @@ def get_sensor_devices(sensor_name):
 @rate_limit()
 def get_locations():
     """Get all locations.
-    
+
     Returns locations with uppercase site identifiers for display purposes.
     The actual database tables for each location use lowercase names internally.
     """
