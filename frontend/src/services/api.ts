@@ -1,7 +1,5 @@
 import api from '../api/axios';
 
-const API_BASE_URL = '/api/v1';
-
 export interface LoginResponse {
     access_token: string;
     refresh_token: string;
@@ -236,7 +234,7 @@ const apiService = {
 
     refreshSensor: async (sensorName: string): Promise<void> => {
         try {
-            await api.get(`/api/v1/sensors/${sensorName}/status`);
+            await api.get(`/sensors/${sensorName}/status`);
         } catch (error: any) {
             console.error('Error refreshing sensor:', error.response?.data || error.message);
             throw error.response?.data || error;
@@ -340,7 +338,7 @@ const apiService = {
 
     deleteJob: async (jobId: number): Promise<void> => {
         try {
-            await api.delete(`/api/v1/jobs/${jobId}`);
+            await api.delete(`/jobs/${jobId}`);
         } catch (error: any) {
             console.error('Error deleting job:', error.response?.data || error.message);
             throw error.response?.data || error;
