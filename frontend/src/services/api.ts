@@ -204,11 +204,7 @@ const apiService = {
             
             return response.data;
         } catch (error: any) {
-            console.error('Login error:', error.response?.data || error.message);
-            if (error.response?.data) {
-                throw error.response.data;
-            }
-            throw error;
+            throw logApiError('Login failed', error);
         }
     },
 
@@ -316,8 +312,7 @@ const apiService = {
             const response = await api.get<LocationsResponse>('/network/locations');
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching network locations:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching network locations', error);
         }
     },
 
@@ -327,8 +322,7 @@ const apiService = {
             const response = await api.get<ConnectionsResponse>(url);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching network connections:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching network connections', error);
         }
     },
 
@@ -337,8 +331,7 @@ const apiService = {
             const response = await api.get('/admin/system/status');
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching system status:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching system status', error);
         }
     },
 
@@ -347,8 +340,7 @@ const apiService = {
             const response = await api.get('/admin/users');
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching active users:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching active users', error);
         }
     },
 
@@ -376,12 +368,12 @@ const apiService = {
             localStorage.setItem('refresh_token', response.data.refresh_token);
             return response.data;
         } catch (error: any) {
-            console.error('Token refresh error:', error.response?.data || error.message);
+            const err = logApiError('Token refresh failed', error);
             // If refresh fails, force logout
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             window.location.href = '/login';
-            throw error;
+            throw err;
         }
     },
 
@@ -450,17 +442,7 @@ const apiService = {
             const response = await api.post('/storage/analyze');
             return response.data;
         } catch (error: any) {
-            console.error('Storage analysis error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Storage analysis error', error);
         }
     },
 
@@ -536,8 +518,7 @@ const apiService = {
             console.log('Locations response:', response.data);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching locations:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching locations', error);
         }
     },
 
@@ -548,8 +529,7 @@ const apiService = {
             console.log('Connections response:', response.data);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching connections:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching connections', error);
         }
     }
 };
