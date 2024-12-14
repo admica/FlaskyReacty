@@ -211,7 +211,7 @@ const apiService = {
 
     getSensorStatus: async (sensorName: string): Promise<any> => {
         try {
-            const response = await api.get(`/api/v1/sensors/${sensorName}/status`);
+            const response = await api.get(`/sensors/${sensorName}/status`);
             return response.data;
         } catch (error: any) {
             console.error('Error fetching sensor status:', error.response?.data || error.message);
@@ -270,7 +270,7 @@ const apiService = {
 
     getJobDetails: async (jobId: number): Promise<Job> => {
         try {
-            const response = await api.get(`/api/v1/jobs/${jobId}`);
+            const response = await api.get(`/jobs/${jobId}`);
             return response.data;
         } catch (error: any) {
             console.error('Error fetching job details:', error.response?.data || error.message);
@@ -331,7 +331,7 @@ const apiService = {
 
     cancelJob: async (jobId: number): Promise<void> => {
         try {
-            await api.post(`/api/v1/jobs/${jobId}/cancel`);
+            await api.post(`/jobs/${jobId}/cancel`);
         } catch (error: any) {
             console.error('Error cancelling job:', error.response?.data || error.message);
             throw error.response?.data || error;
@@ -420,7 +420,7 @@ const apiService = {
     // Cache operations
     clearCache: async (cacheType: string) => {
         try {
-            const response = await api.post('/api/v1/admin/cache/clear', { type: cacheType });
+            const response = await api.post('/admin/cache/clear', { type: cacheType });
             return response.data;
         } catch (error) {
             console.error('Cache clear error:', error);
@@ -430,7 +430,7 @@ const apiService = {
 
     refreshCache: async (cacheType: string) => {
         try {
-            const response = await api.post('/api/v1/admin/cache/refresh', { type: cacheType });
+            const response = await api.post('/admin/cache/refresh', { type: cacheType });
             return response.data;
         } catch (error) {
             console.error('Cache refresh error:', error);
@@ -440,7 +440,7 @@ const apiService = {
 
     getCacheMetrics: async () => {
         try {
-            const response = await api.get('/api/v1/admin/cache/metrics');
+            const response = await api.get('/admin/cache/metrics');
             return response.data;
         } catch (error) {
             console.error('Cache metrics error:', error);
@@ -449,7 +449,7 @@ const apiService = {
     },
 
     analyzeStorage: async () => {
-        const response = await api.post('/api/v1/storage/analyze');
+        const response = await api.post('/storage/analyze');
         return response.data;
     },
 
