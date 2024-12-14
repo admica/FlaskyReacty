@@ -289,8 +289,7 @@ const apiService = {
             const response = await api.get('/jobs', { params });
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching jobs:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching jobs', error);
         }
     },
 
@@ -299,8 +298,7 @@ const apiService = {
             const response = await api.get(`/jobs/${jobId}`);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching job details:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError(`Error fetching job details for job ${jobId}`, error);
         }
     },
 
@@ -309,8 +307,7 @@ const apiService = {
             const response = await api.get(`/jobs/${jobId}/analysis`);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching job analysis:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError(`Error fetching job analysis for job ${jobId}`, error);
         }
     },
 
@@ -359,8 +356,7 @@ const apiService = {
         try {
             await api.post(`/jobs/${jobId}/cancel`);
         } catch (error: any) {
-            console.error('Error cancelling job:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError(`Error cancelling job ${jobId}`, error);
         }
     },
 
@@ -368,8 +364,7 @@ const apiService = {
         try {
             await api.delete(`/jobs/${jobId}`);
         } catch (error: any) {
-            console.error('Error deleting job:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError(`Error deleting job ${jobId}`, error);
         }
     },
 
@@ -530,8 +525,7 @@ const apiService = {
             const response = await api.post('/submit', jobData);
             return response.data;
         } catch (error: any) {
-            console.error('Error submitting job:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error submitting job', error);
         }
     },
 
