@@ -45,7 +45,7 @@ CREATE TABLE subnet_mapping_monthly_summary (
     unique_src_subnets int NOT NULL,
     unique_dst_subnets int NOT NULL,
     total_packets bigint NOT NULL,
-    avg_packets_per_mapping numeric(10,2) NOT NULL,
+    avg_packets_per_mapping numeric(16,2) NOT NULL,
     total_mappings int NOT NULL,
     storage_bytes bigint NOT NULL,
     CONSTRAINT subnet_mapping_monthly_pkey PRIMARY KEY (year_month, src_location, dst_location),
@@ -332,7 +332,7 @@ BEGIN
         unique_src_subnets,
         unique_dst_subnets,
         total_packets,
-        (total_packets::numeric / NULLIF(total_mappings, 0))::numeric(10,2) as avg_packets_per_mapping,
+        (total_packets::numeric / NULLIF(total_mappings, 0))::numeric(16,2) as avg_packets_per_mapping,
         total_mappings,
         storage_bytes
     FROM monthly_stats

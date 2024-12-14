@@ -23,6 +23,10 @@ from core import (
     CustomJSONEncoder, generate_signed_url, server_status
 )
 
+# Request counting middleware
+request_count = 0
+request_count_lock = threading.Lock()
+
 # Import blueprints
 from api.auth import auth_bp
 from api.jobs import jobs_bp
@@ -39,9 +43,6 @@ from api.subnet_mapping import subnet_mapping_bp
 
 # Import network maintenance
 from api.network_tasks import maintenance_thread
-
-# Import job monitoring
-from job_monitor import job_monitor_thread
 
 # Import Redis client
 from cache_utils import redis_client
@@ -64,17 +65,6 @@ def cleanup_handler(signo=None, frame=None):
                     logger.warning("Network maintenance thread did not stop gracefully")
             except Exception as e:
                 logger.error(f"Error stopping network maintenance thread: {e}")
-
-        # Stop job monitor thread
-        if job_monitor_thread and job_monitor_thread.is_alive():
-            try:
-                logger.info("Stopping job monitor thread...")
-                job_monitor_thread.stop()
-                job_monitor_thread.join(timeout=10)
-                if job_monitor_thread.is_alive():
-                    logger.warning("Job monitor thread did not stop gracefully")
-            except Exception as e:
-                logger.error(f"Error stopping job monitor thread: {e}")
 
         # Stop all sensor threads
         active_threads = list(sensor_queues.keys())
@@ -303,10 +293,6 @@ if __name__ == '__main__':
         # Start maintenance thread
         maintenance_thread.start()
         logger.info("Network maintenance thread started")
-
-        # Start job monitor thread
-        job_monitor_thread.start()
-        logger.info("Job monitor thread started")
 
         # Configure SSL context
         ssl_context = None
