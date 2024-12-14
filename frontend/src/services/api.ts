@@ -228,8 +228,7 @@ const apiService = {
             const response = await api.get('/sensors');
             return response.data;
         } catch (error: any) {
-            console.error('Error in getSensors:', error.response?.data || error.message);
-            throw error;
+            throw logApiError('Error fetching sensors', error);
         }
     },
 
@@ -238,8 +237,7 @@ const apiService = {
             const response = await api.get(`/sensors/${sensorName}/status`);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching sensor details:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching sensor details', error);
         }
     },
 
@@ -248,8 +246,7 @@ const apiService = {
             const response = await api.get(`/sensors/${sensorName}/status`);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching sensor status:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError('Error fetching sensor status', error);
         }
     },
 
@@ -260,11 +257,7 @@ const apiService = {
             console.log('Devices response:', response.data);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching sensor devices:', {
-                sensor: sensorName,
-                error: error.response?.data || error.message
-            });
-            throw error;
+            throw logApiError(`Error fetching devices for sensor ${sensorName}`, error);
         }
     },
 
@@ -272,8 +265,7 @@ const apiService = {
         try {
             await api.get(`/sensors/${sensorName}/status`);
         } catch (error: any) {
-            console.error('Error refreshing sensor:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            throw logApiError(`Error refreshing sensor ${sensorName}`, error);
         }
     },
 
