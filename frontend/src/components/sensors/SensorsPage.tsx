@@ -10,7 +10,7 @@ interface Sensor {
   name: string;
   fqdn: string;
   status: string;
-  pcap_avail: string;
+  pcap_avail: number;
   totalspace: string;
   usedspace: string;
   last_update: string;
@@ -23,8 +23,8 @@ interface ApiSensor {
   fqdn: string;
   status: string;
   pcap_avail: number;
-  totalspace: number;
-  usedspace: number;
+  totalspace: string;
+  usedspace: string;
   last_update: string;
   version?: string;
   location: string;
@@ -64,6 +64,9 @@ interface Device {
   overflows: number;
   size: string;
   version: string;
+  output_path: string;
+  proc: string;
+  stats_date: string;
 }
 
 interface DebugMessage {
@@ -109,26 +112,43 @@ export function SensorsPage() {
   const fetchSensors = async () => {
     try {
       addDebugMessage('Fetching sensors data...');
+      console.log('Fetching sensors from API...');
       const response = await apiService.getSensors();
-      const mappedSensors: Sensor[] = (response.sensors as ApiSensor[]).map(s => ({
-        name: s.name,
-        fqdn: s.fqdn,
-        status: s.status,
-        location: s.location,
-        version: s.version || null,
-        pcap_avail: s.pcap_avail.toString(),
-        usedspace: s.usedspace.toString(),
-        totalspace: s.totalspace.toString(),
-        last_update: s.last_update
-      }));
+      console.log('API response:', response);
+      
+      if (!response || !response.sensors) {
+        throw new Error('Invalid response format: missing sensors data');
+      }
+
+      const mappedSensors: Sensor[] = response.sensors;
       setSensors(mappedSensors);
       addDebugMessage(`Successfully fetched ${mappedSensors.length} sensors`);
+      console.log('Mapped sensors:', mappedSensors);
       setError(null);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      addDebugMessage(`Error fetching sensors: ${errorMessage}`);
-      setError('Failed to fetch sensors data');
-      console.error('Error fetching sensors:', err);
+    } catch (err: any) {
+      console.error('Error fetching sensors:', {
+        error: err,
+        response: err.response,
+        message: err.message,
+        stack: err.stack
+      });
+      
+      let errorMessage: string;
+      if (err.response) {
+        // API error response
+        errorMessage = `API Error: ${err.response.status} - ${err.response.data?.error || err.response.statusText}`;
+        addDebugMessage(`API Error Response: ${JSON.stringify(err.response.data)}`);
+      } else if (err.request) {
+        // Request made but no response
+        errorMessage = 'No response received from server';
+        addDebugMessage('Network Error: No response received');
+      } else {
+        // Error setting up request
+        errorMessage = err.message || 'An unknown error occurred';
+        addDebugMessage(`Request Error: ${err.message}`);
+      }
+      
+      setError(`Failed to fetch sensors data: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -137,6 +157,7 @@ export function SensorsPage() {
   // Initial fetch
   useEffect(() => {
     fetchSensors();
+    addDebugMessage('Initial sensors fetch triggered');
   }, []);
 
   // Auto-refresh setup
@@ -144,15 +165,17 @@ export function SensorsPage() {
     const interval = parseInt(refreshInterval);
     if (interval === 0) {
       setRefreshProgress(100);
+      addDebugMessage('Auto-refresh disabled');
       return;
     }
 
-    // Update progress every 100ms
+    addDebugMessage(`Setting up auto-refresh interval: ${interval} seconds`);
+    
     const progressInterval = 100;
     const steps = interval * 1000 / progressInterval;
     const decrementAmount = 100 / steps;
     
-    setRefreshProgress(100); // Reset progress when interval changes
+    setRefreshProgress(100);
     
     const progressTimer = setInterval(() => {
       setRefreshProgress(prev => Math.max(0, prev - decrementAmount));
@@ -160,12 +183,14 @@ export function SensorsPage() {
 
     const refreshTimer = setInterval(() => {
       setRefreshProgress(100);
+      addDebugMessage('Auto-refresh triggered');
       fetchSensors();
     }, interval * 1000);
 
     return () => {
       clearInterval(progressTimer);
       clearInterval(refreshTimer);
+      addDebugMessage('Cleaned up refresh timers');
     };
   }, [refreshInterval]);
 
@@ -180,25 +205,8 @@ export function SensorsPage() {
       addDebugMessage(`Fetching devices for sensor: ${selectedSensor}`);
       try {
         const response = await apiService.getSensorDevices(selectedSensor);
-        const mappedDevices: Device[] = (response.devices as ApiDevice[]).map(d => ({
-          name: d.name,
-          port: d.port,
-          type: d.type,
-          status: d.status,
-          last_checked: d.last_checked,
-          runtime: d.runtime,
-          workers: d.workers,
-          src_subnets: d.src_subnets,
-          dst_subnets: d.dst_subnets,
-          uniq_subnets: d.uniq_subnets,
-          avg_idle_time: d.avg_idle_time,
-          avg_work_time: d.avg_work_time,
-          overflows: d.overflows,
-          size: d.size,
-          version: d.version
-        }));
-        setDevices(mappedDevices);
-        addDebugMessage(`Successfully fetched ${mappedDevices.length} devices for ${selectedSensor}`);
+        setDevices(response.devices);
+        addDebugMessage(`Successfully fetched ${response.devices.length} devices for ${selectedSensor}`);
       } catch (err) {
         const errorMessage = typeof err === 'string' ? err : 'Failed to fetch devices';
         addDebugMessage(`Error fetching devices: ${errorMessage}`);
@@ -225,6 +233,7 @@ export function SensorsPage() {
   };
 
   const handleSort = (field: SortField) => {
+    addDebugMessage(`Sorting by ${field} in ${sortDirection === 'asc' ? 'desc' : 'asc'} order`);
     if (sortBy === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -263,8 +272,8 @@ export function SensorsPage() {
   };
 
   const handleCloseModal = () => {
+    addDebugMessage('Closing device details modal');
     setSelectedSensor(null);
-    setDevices([]);
   };
 
   const getDeviceTypeColor = (type: string) => {
@@ -331,11 +340,9 @@ export function SensorsPage() {
     return parts.join(', ');
   };
 
-  const getStoragePercentage = (used: string, total: string): number => {
-    // Remove 'G' suffix and convert to numbers
-    const usedNum = parseFloat(used.replace('G', ''));
-    const totalNum = parseFloat(total.replace('G', ''));
-    return (usedNum / totalNum) * 100;
+  const getStoragePercentage = (used: string): number => {
+    // Remove '%' suffix and convert to number
+    return parseFloat(used.replace('%', ''));
   };
 
   if (loading) {
@@ -355,7 +362,7 @@ export function SensorsPage() {
   }
 
   return (
-    <Box p="md" style={{ position: 'relative' }}>
+    <Box style={{ position: 'relative', minHeight: '100vh' }}>
       <Group justify="space-between" mb="md">
         <Title order={2}>Sensors</Title>
       </Group>
@@ -505,7 +512,7 @@ export function SensorsPage() {
                       >
                         <Box
                           style={{
-                            width: `${getStoragePercentage(sensor.usedspace, sensor.totalspace)}%`,
+                            width: `${getStoragePercentage(sensor.usedspace)}%`,
                             height: '100%',
                             backgroundColor: 'var(--mantine-color-blue-5)',
                             transition: 'width 0.3s ease'
@@ -656,7 +663,9 @@ export function SensorsPage() {
                       userSelect: 'text'
                     }}
                   >
-                    <Text span c="dimmed" size="xs" style={{ userSelect: 'text' }}>[{new Date(msg.timestamp).toLocaleTimeString()}]</Text>{' '}
+                    <Text span c="dimmed" size="xs" style={{ userSelect: 'text' }}>
+                      [{new Date(msg.timestamp).toLocaleTimeString()}]
+                    </Text>{' '}
                     {msg.message}
                   </Text>
                 ))}
@@ -674,9 +683,13 @@ export function SensorsPage() {
           right: 0,
           width: '100px',
           height: '100px',
-          zIndex: 999
+          zIndex: 999,
+          cursor: 'default'
         }}
-        onMouseEnter={() => setShowDebug(true)}
+        onMouseEnter={() => {
+          console.log('Debug area hover');
+          setShowDebug(true);
+        }}
       />
     </Box>
   );

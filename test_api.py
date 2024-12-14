@@ -159,6 +159,82 @@ class AuthTestSuite(TestSuite):
             result.get('error')
         ))
 
+class HealthTestSuite(TestSuite):
+    """Test suite for health check endpoints"""
+    def __init__(self, api):
+        super().__init__("Health Check Tests")
+        self.api = api
+
+    def run(self) -> None:
+        """Run all health check tests"""
+        print("\n[bold]Running Health Check Tests[/bold]")
+
+        # Test 1: Health check
+        print("Running: Basic Health Check")
+        result = self.api.health_check()
+        self.add_result(TestResult(
+            "Health Check",
+            result.get('success', False),
+            result.get('response'),
+            result.get('error')
+        ))
+
+        # Test 2: Version check
+        print("Running: Version Check")
+        result = self.api.version_check()
+        self.add_result(TestResult(
+            "Version Check",
+            result.get('success', False),
+            result.get('response'),
+            result.get('error')
+        ))
+
+class SensorTestSuite(TestSuite):
+    """Test suite for sensor endpoints"""
+    def __init__(self, api):
+        super().__init__("Sensor Tests")
+        self.api = api
+
+    def run(self) -> None:
+        """Run all sensor tests"""
+        print("\n[bold]Running Sensor Tests[/bold]")
+
+        # Test 1: Get all sensors
+        print("Running: Get All Sensors")
+        result = self.api.get_sensors()
+        self.add_result(TestResult(
+            "Get All Sensors",
+            result.get('success', False),
+            result.get('response'),
+            result.get('error')
+        ))
+
+        # Store first sensor for subsequent tests
+        if result.get('success') and result.get('response', {}).get('sensors'):
+            first_sensor = result['response']['sensors'][0]['name']
+            
+            # Test 2: Get specific sensor status
+            print(f"Running: Get Sensor Status for {first_sensor}")
+            result = self.api.get_sensor_status(first_sensor)
+            self.add_result(TestResult(
+                f"Get Sensor Status ({first_sensor})",
+                result.get('success', False),
+                result.get('response'),
+                result.get('error')
+            ))
+
+            # Test 3: Get sensor devices
+            print(f"Running: Get Sensor Devices for {first_sensor}")
+            result = self.api.get_sensor_devices(first_sensor)
+            self.add_result(TestResult(
+                f"Get Sensor Devices ({first_sensor})",
+                result.get('success', False),
+                result.get('response'),
+                result.get('error')
+            ))
+        else:
+            print("[yellow]No sensors found - skipping sensor-specific tests[/yellow]")
+
 class PCAPServerAPI:
     """Main API testing class"""
     def __init__(self, base_url: str):
@@ -271,6 +347,43 @@ class PCAPServerAPI:
             'error': None if result['status_code'] == 401 else 'Token still valid after logout'
         }
 
+    def health_check(self) -> Dict:
+        """Check API health status"""
+        return self.request(
+            "GET",
+            "/api/v1/health",
+            auth=False  # Health check doesn't require auth
+        )
+
+    def version_check(self) -> Dict:
+        """Get API version info"""
+        return self.request(
+            "GET",
+            "/api/v1/version",
+            auth=False  # Version check doesn't require auth
+        )
+
+    def get_sensors(self) -> Dict:
+        """Get list of all sensors"""
+        return self.request(
+            "GET",
+            "/api/v1/sensors"
+        )
+
+    def get_sensor_status(self, sensor_name: str) -> Dict:
+        """Get status for a specific sensor"""
+        return self.request(
+            "GET",
+            f"/api/v1/sensors/{sensor_name}/status"
+        )
+
+    def get_sensor_devices(self, sensor_name: str) -> Dict:
+        """Get devices for a specific sensor"""
+        return self.request(
+            "GET",
+            f"/api/v1/sensors/{sensor_name}/devices"
+        )
+
 def main():
     """Main test runner"""
     # Get base URL from command line or use default
@@ -285,6 +398,16 @@ def main():
         auth_suite = AuthTestSuite(api)
         auth_suite.run()
         auth_suite.print_results()
+
+        # Run health checks
+        health_suite = HealthTestSuite(api)
+        health_suite.run()
+        health_suite.print_results()
+
+        # Run sensor tests (requires auth from previous suite)
+        sensor_suite = SensorTestSuite(api)
+        sensor_suite.run()
+        sensor_suite.print_results()
 
     except KeyboardInterrupt:
         print("\n[yellow]Tests interrupted by user[/yellow]")

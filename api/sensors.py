@@ -443,25 +443,30 @@ def get_sensors():
         cache_key = get_cache_key('sensors', 'admin' if is_admin else 'user')
         cached = redis_client.get(cache_key)
         if cached:
+            logger.debug(f"Returning cached sensors data: {cached}")
             return cached, 200
 
         rows = db("SELECT name, status, pcap_avail, totalspace, usedspace, last_update, fqdn, version, location FROM sensors")
+        logger.debug(f"Raw sensor rows from DB: {rows}")
+        
         response_data = []
         for sensor in rows:
             sensor_data = {
                 'name': sensor[0],
                 'status': sensor[1],
-                'pcap_avail': sensor[2],
-                'totalspace': sensor[3],
-                'usedspace': sensor[4],
+                'pcap_avail': sensor[2],  # This is an integer
+                'totalspace': sensor[3],   # This is a string
+                'usedspace': sensor[4],    # This is a string
                 'last_update': sensor[5].isoformat() if sensor[5] else None,
                 'fqdn': sensor[6],
                 'version': sensor[7],
                 'location': sensor[8]
             }
+            logger.debug(f"Processed sensor data: {sensor_data}")
             response_data.append(sensor_data)
 
         response = {'sensors': response_data}
+        logger.debug(f"Final response data: {response}")
 
         # Cache the response
         redis_client.setex(

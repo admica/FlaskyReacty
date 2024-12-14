@@ -1,4 +1,4 @@
-Ask questions for clarification instead of making assumptions.
-Ensure all relevent code is thoroughly reviewed.
-Avoid removing code unrelated to the changes you wish to make.
-When working with React code, keep typescript types in mind when making changes.
+Making small, targeted modifications after getting your clarification
+Look for other relevent code and files in the project.
+Avoid removing code unrelated to the changes required.
+If you find code that I might be able to help clarify for you, ask me questions about the code.

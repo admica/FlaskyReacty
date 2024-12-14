@@ -53,6 +53,11 @@ export interface Sensor {
     status: string;
     location: string;
     fqdn?: string;
+    pcap_avail?: number;
+    totalspace?: string;
+    usedspace?: string;
+    last_update?: string;
+    version?: string;
 }
 
 export interface SensorSummary {
@@ -179,6 +184,16 @@ export interface LogsResponse {
     timestamp: string;
 }
 
+export interface SensorsResponse {
+    sensors: Sensor[];
+}
+
+export interface DevicesResponse {
+    count: number;
+    devices: Device[];
+    sensor: string;
+}
+
 const apiService = {
     login: async (username: string, password: string): Promise<LoginResponse> => {
         console.log('Attempting login for user:', username);
@@ -213,13 +228,14 @@ const apiService = {
         delete api.defaults.headers.common['Authorization'];
     },
 
-    getSensors: async (): Promise<{ sensors: Sensor[] }> => {
+    getSensors: async (): Promise<SensorsResponse> => {
         try {
+            console.log('Fetching sensors with auth token');
             const response = await api.get('/sensors');
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching sensors:', error.response?.data || error.message);
-            throw error.response?.data || error;
+            console.error('Error in getSensors:', error.response?.data || error.message);
+            throw error;
         }
     },
 
@@ -233,20 +249,34 @@ const apiService = {
         }
     },
 
-    getSensorDevices: async (sensorName: string): Promise<{ devices: { name: string; port: number; }[] }> => {
+    getSensorStatus: async (sensorName: string): Promise<any> => {
         try {
-            const response = await api.get(`/sensors/${sensorName}/devices`);
+            const response = await api.get(`/api/v1/sensors/${sensorName}/status`);
             return response.data;
         } catch (error: any) {
-            console.error('Error fetching sensor devices:', error.response?.data || error.message);
-            const errorMessage = error.response?.data?.error || error.response?.data || error.message || 'Unknown error';
-            throw errorMessage;
+            console.error('Error fetching sensor status:', error.response?.data || error.message);
+            throw error.response?.data || error;
+        }
+    },
+
+    getSensorDevices: async (sensorName: string): Promise<DevicesResponse> => {
+        try {
+            console.log(`Fetching devices for sensor: ${sensorName}`);
+            const response = await api.get(`/sensors/${sensorName}/devices`);
+            console.log('Devices response:', response.data);
+            return response.data;
+        } catch (error: any) {
+            console.error('Error fetching sensor devices:', {
+                sensor: sensorName,
+                error: error.response?.data || error.message
+            });
+            throw error;
         }
     },
 
     refreshSensor: async (sensorName: string): Promise<void> => {
         try {
-            await api.get(`/sensors/${sensorName}/status`);
+            await api.get(`/api/v1/sensors/${sensorName}/status`);
         } catch (error: any) {
             console.error('Error refreshing sensor:', error.response?.data || error.message);
             throw error.response?.data || error;
