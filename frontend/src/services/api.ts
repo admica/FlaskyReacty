@@ -349,13 +349,13 @@ const apiService = {
         try {
             const response = await api.post('/refresh');
             // Update stored tokens
-            localStorage.setItem('token', response.data.access_token);
+            localStorage.setItem('access_token', response.data.access_token);
             localStorage.setItem('refresh_token', response.data.refresh_token);
             return response.data;
         } catch (error: any) {
             console.error('Token refresh error:', error.response?.data || error.message);
             // If refresh fails, force logout
-            localStorage.removeItem('token');
+            localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             window.location.href = '/login';
             throw error;
@@ -420,9 +420,18 @@ const apiService = {
         try {
             const response = await api.post('/admin/cache/clear', { type: cacheType });
             return response.data;
-        } catch (error) {
-            console.error('Cache clear error:', error);
-            throw error;
+        } catch (error: any) {
+            console.error('Cache clear error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
         }
     },
 
@@ -430,9 +439,18 @@ const apiService = {
         try {
             const response = await api.post('/admin/cache/refresh', { type: cacheType });
             return response.data;
-        } catch (error) {
-            console.error('Cache refresh error:', error);
-            throw error;
+        } catch (error: any) {
+            console.error('Cache refresh error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
         }
     },
 
@@ -440,9 +458,18 @@ const apiService = {
         try {
             const response = await api.get('/admin/cache/metrics');
             return response.data;
-        } catch (error) {
-            console.error('Cache metrics error:', error);
-            throw error;
+        } catch (error: any) {
+            console.error('Cache metrics error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
         }
     },
 
