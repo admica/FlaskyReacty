@@ -1,5 +1,20 @@
 import api from '../api/axios';
 
+// Helper function for consistent error logging
+const logApiError = (context: string, error: any) => {
+    console.error(`${context}:`, {
+        status: error.response?.status,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        config: {
+            url: error.config?.url,
+            method: error.config?.method,
+            headers: error.config?.headers
+        }
+    });
+    return error.response?.data || error;
+};
+
 export interface LoginResponse {
     access_token: string;
     refresh_token: string;
@@ -451,17 +466,7 @@ const apiService = {
             const response = await api.post('/admin/cache/clear', { type: cacheType });
             return response.data;
         } catch (error: any) {
-            console.error('Cache clear error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Cache clear error', error);
         }
     },
 
@@ -470,17 +475,7 @@ const apiService = {
             const response = await api.post('/admin/cache/refresh', { type: cacheType });
             return response.data;
         } catch (error: any) {
-            console.error('Cache refresh error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Cache refresh error', error);
         }
     },
 
@@ -489,17 +484,7 @@ const apiService = {
             const response = await api.get('/admin/cache/metrics');
             return response.data;
         } catch (error: any) {
-            console.error('Cache metrics error:', {
-                status: error.response?.status,
-                data: error.response?.data,
-                headers: error.response?.headers,
-                config: {
-                    url: error.config?.url,
-                    method: error.config?.method,
-                    headers: error.config?.headers
-                }
-            });
-            throw error.response?.data || error;
+            throw logApiError('Cache metrics error', error);
         }
     },
 
