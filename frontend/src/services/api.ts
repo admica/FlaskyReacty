@@ -146,6 +146,27 @@ export interface SensorsResponse {
     sensors: Sensor[];
 }
 
+export interface Device {
+    name: string;
+    port: number;
+    type: string;
+    status: string;
+    last_checked: string;
+    runtime: number;
+    workers: number;
+    src_subnets: number;
+    dst_subnets: number;
+    uniq_subnets: number;
+    avg_idle_time: number;
+    avg_work_time: number;
+    overflows: number;
+    size: string;
+    version: string;
+    output_path?: string;
+    proc?: string;
+    stats_date?: string;
+}
+
 export interface DevicesResponse {
     count: number;
     devices: Device[];
@@ -388,9 +409,18 @@ const apiService = {
         try {
             const response = await api.get('/version');
             return response.data;
-        } catch (error) {
-            console.error('Version check error:', error);
-            throw error;
+        } catch (error: any) {
+            console.error('Version check error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
         }
     },
 
@@ -474,8 +504,22 @@ const apiService = {
     },
 
     analyzeStorage: async () => {
-        const response = await api.post('/storage/analyze');
-        return response.data;
+        try {
+            const response = await api.post('/storage/analyze');
+            return response.data;
+        } catch (error: any) {
+            console.error('Storage analysis error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
+        }
     },
 
     // Log endpoints
@@ -483,9 +527,18 @@ const apiService = {
         try {
             const response = await api.get('/logs/list');
             return response.data;
-        } catch (error) {
-            console.error('Log files list error:', error);
-            throw error;
+        } catch (error: any) {
+            console.error('Log files list error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
         }
     },
 
@@ -495,9 +548,18 @@ const apiService = {
                 params: { lines }
             });
             return response.data;
-        } catch (error) {
-            console.error('Log content error:', error);
-            throw error;
+        } catch (error: any) {
+            console.error('Log content error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
         }
     },
 
@@ -511,9 +573,18 @@ const apiService = {
                 }
             });
             return response.data;
-        } catch (error) {
-            console.error('Log streaming error:', error);
-            throw error;
+        } catch (error: any) {
+            console.error('Log streaming error:', {
+                status: error.response?.status,
+                data: error.response?.data,
+                headers: error.response?.headers,
+                config: {
+                    url: error.config?.url,
+                    method: error.config?.method,
+                    headers: error.config?.headers
+                }
+            });
+            throw error.response?.data || error;
         }
     },
 
