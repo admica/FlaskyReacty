@@ -75,7 +75,7 @@ def validate_job_params(data: dict) -> tuple[Optional[dict], Optional[List[str]]
 
 @jobs_bp.route('/api/v1/jobs/submit', methods=['POST'])
 @jwt_required()
-@activity_tracking
+@activity_tracking()
 def submit_job():
     """Submit a new PCAP search job for a location.
 

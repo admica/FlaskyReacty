@@ -25,26 +25,17 @@ from core import (
 
 # Import blueprints
 from api.auth import auth_bp
-from api.job_jobs import jobs_bp
-from api.job_tasks import tasks_bp
-from api.job_merges import merges_bp
-from api.job_downloads import downloads_bp
-from api.sensors import sensors_bp
+from api.jobs import jobs_bp
 from api.admin import admin_bp
-from api.health import health_bp
-from api.storage import storage_bp
 from api.analytics import analytics_bp
-from api.search import search_bp
-from api.subnet_mapping import subnet_mapping_bp
-from api.network import network_bp
+from api.health import health_bp
 from api.logs import logs_bp
 from api.logs_ws import logs_ws_bp, sock
-
-# Import sensor thread management
-from api.sensor_threads import (
-    sensor_queues, sensor_threads, analysis_queue,
-    request_count, request_count_lock
-)
+from api.network import network_bp
+from api.search import search_bp
+from api.sensors import sensors_bp
+from api.storage import storage_bp
+from api.subnet_mapping import subnet_mapping_bp
 
 # Import network maintenance
 from api.network_tasks import maintenance_thread
@@ -166,19 +157,16 @@ def revoked_token_callback(jwt_header, jwt_payload):
 # Register blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(jobs_bp)
-app.register_blueprint(tasks_bp)
-app.register_blueprint(merges_bp)
-app.register_blueprint(downloads_bp)
-app.register_blueprint(sensors_bp)
 app.register_blueprint(admin_bp)
-app.register_blueprint(health_bp)
-app.register_blueprint(storage_bp)
 app.register_blueprint(analytics_bp)
-app.register_blueprint(search_bp)
-app.register_blueprint(subnet_mapping_bp)
-app.register_blueprint(network_bp)
+app.register_blueprint(health_bp)
 app.register_blueprint(logs_bp)
 app.register_blueprint(logs_ws_bp)
+app.register_blueprint(network_bp)
+app.register_blueprint(search_bp)
+app.register_blueprint(sensors_bp)
+app.register_blueprint(storage_bp)
+app.register_blueprint(subnet_mapping_bp)
 
 # Register cleanup handlers
 atexit.register(cleanup_handler)

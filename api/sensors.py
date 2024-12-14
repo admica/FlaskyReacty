@@ -7,14 +7,11 @@ import re
 from typing import List
 import json
 import traceback
-from queue import Queue
-from threading import Thread
 from datetime import datetime, timezone
 
 from core import logger, db, rate_limit, db_pool, config
 from api.auth import admin_required, activity_tracking
 from cache_utils import redis_client, get_cache_key
-from api.sensor_threads import sensor_queues, sensor_threads, sensor_thread
 
 sensors_bp = Blueprint('sensors', __name__)
 
@@ -89,13 +86,6 @@ def initialize_sensors_from_config():
                         logger.error(f"Error adding device {device_name} for sensor {name}: {e}")
                         logger.debug(traceback.format_exc())
                         continue
-
-                # Initialize sensor queue and thread if not already exists
-                if name not in sensor_queues:
-                    sensor_queues[name] = Queue()
-                    sensor_threads[name] = Thread(target=sensor_thread, args=(name,))
-                    sensor_threads[name].start()
-                    logger.info(f'Initialized queue and thread for sensor: {name}')
 
             except Exception as e:
                 logger.error(f"Error processing sensor {sensor_name}: {e}")
