@@ -10,6 +10,8 @@ import {
   Divider,
   Group,
   Avatar,
+  useMantineTheme,
+  rgba,
 } from '@mantine/core';
 import {
   IconHome,
@@ -31,25 +33,40 @@ interface NavbarLinkProps {
 }
 
 function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
+  const theme = useMantineTheme();
+  
   return (
     <UnstyledButton
       onClick={onClick}
+      data-active={active || undefined}
       style={{
         display: 'block',
         width: '100%',
         padding: '8px',
         borderRadius: '6px',
-        backgroundColor: active ? 'rgba(79, 172, 254, 0.15)' : 'transparent',
-        color: active ? '#4facfe' : '#C1C2C5',
+        backgroundColor: active ? 
+          theme.colorScheme === 'dark' ? 
+            rgba(theme.colors.blue[9], 0.25) : 
+            rgba(theme.colors.blue[0], 0.35) : 
+          'transparent',
+        color: active ? 
+          theme.colorScheme === 'dark' ? 
+            theme.colors.blue[4] : 
+            theme.colors.blue[7] : 
+          theme.colorScheme === 'dark' ? 
+            theme.colors.dark[0] : 
+            theme.colors.gray[7],
         '&:hover': {
-          backgroundColor: 'rgba(79, 172, 254, 0.1)',
+          backgroundColor: theme.colorScheme === 'dark' ? 
+            rgba(theme.colors.blue[9], 0.15) : 
+            rgba(theme.colors.blue[0], 0.25),
         },
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center' }}>
+      <Group gap="md">
         <Icon size={24} />
-        <Text ml="md">{label}</Text>
-      </div>
+        <Text>{label}</Text>
+      </Group>
     </UnstyledButton>
   );
 }
@@ -67,6 +84,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [avatarSeed, setAvatarSeed] = useState<number | null>(null);
+  const theme = useMantineTheme();
 
   const isAdmin = localStorage.getItem('isAdmin') === 'true';
   const username = localStorage.getItem('username');
@@ -89,12 +107,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AppShell
-      layout="default"
       navbar={{ width: 300, breakpoint: 'sm' }}
-      padding="md"
     >
       <AppShell.Navbar p="md">
-        <Stack gap="xs" style={{ height: '100%' }}>
+        <Stack gap="xs" h="100%">
           <Stack gap="xs" style={{ flex: 1 }}>
             {filteredNavItems.map((item) => (
               <NavbarLink

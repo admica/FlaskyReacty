@@ -14,22 +14,13 @@ import {
 import { IconMoonStars, IconSun, IconRefresh } from '@tabler/icons-react';
 import apiService from '../../services/api';
 
-const getAvatarColor = (seed: number | null) => {
-  // Generate color based on the seed instead of username
-  const colors = ['blue', 'cyan', 'green', 'yellow', 'orange', 'red', 'pink', 'grape', 'violet', 'indigo'];
-  if (seed === null) return 'blue'; // Default color
-  return colors[seed % colors.length];
-};
-
 export function PreferencesPage() {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [avatarSeed, setAvatarSeed] = useState<number>(Math.floor(Math.random() * 1000000));
   const [loading, setLoading] = useState(false);
-  const [settings, setSettings] = useState({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const username = localStorage.getItem('username') || '';
 
-  // Load preferences from backend when component mounts
   useEffect(() => {
     loadUserPreferences();
   }, []);
@@ -39,13 +30,11 @@ export function PreferencesPage() {
       const response = await apiService.get('/preferences');
       console.log('Loaded preferences from backend:', response.data);
       
-      setTheme(response.data.theme || 'dark');
-      // Ensure avatar_seed is never null
-      setAvatarSeed(response.data.avatar_seed || Math.floor(Math.random() * 1000000));
-      setSettings(response.data.settings || {});
-      
-      // Update localStorage for theme
-      localStorage.setItem('theme', response.data.theme || 'dark');
+      if (response.data) {
+        setTheme(response.data.theme || 'dark');
+        localStorage.setItem('theme', response.data.theme || 'dark');
+        setAvatarSeed(response.data.avatar_seed || Math.floor(Math.random() * 1000000));
+      }
     } catch (error) {
       console.error('Failed to load preferences:', error);
     }
@@ -55,7 +44,6 @@ export function PreferencesPage() {
     setLoading(true);
     setSaveStatus('idle');
     try {
-      // Ensure we have a valid avatar_seed before saving
       const currentSeed = avatarSeed || Math.floor(Math.random() * 1000000);
       setAvatarSeed(currentSeed);
 
@@ -68,27 +56,35 @@ export function PreferencesPage() {
       console.log('Preferences saved successfully to backend');
       localStorage.setItem('theme', theme);
       setSaveStatus('success');
-      // Verify the save by reloading preferences
       await loadUserPreferences();
     } catch (error: any) {
       console.error('Failed to save preferences:', error.response?.data?.error || error.message);
       setSaveStatus('error');
     } finally {
       setLoading(false);
-      // Reset save status after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
     }
   };
 
-  const handleThemeChange = (newTheme: string) => {
+  const handleThemeChange = async (newTheme: string) => {
     setTheme(newTheme);
-    // Don't save immediately, wait for user to click save
+    localStorage.setItem('theme', newTheme);
+    
+    try {
+      await apiService.post('/preferences', {
+        theme: newTheme,
+        avatar_seed: avatarSeed,
+        settings: {}
+      });
+      console.log('Theme preference saved to backend');
+    } catch (error) {
+      console.error('Failed to save theme preference:', error);
+    }
   };
 
   const regenerateAvatar = () => {
     const newSeed = Math.floor(Math.random() * 1000000);
     setAvatarSeed(newSeed);
-    // Don't save immediately, wait for user to click save
   };
 
   return (
@@ -133,7 +129,6 @@ export function PreferencesPage() {
               <Avatar 
                 size="xl" 
                 radius="xl"
-                color={getAvatarColor(avatarSeed)}
                 src={avatarSeed ? `/api/v1/avatar/${avatarSeed}?username=${username}` : undefined}
               >
                 {username[0]?.toUpperCase() || 'U'}
@@ -142,6 +137,7 @@ export function PreferencesPage() {
                 variant="light"
                 leftSection={<IconRefresh size={16} />}
                 onClick={regenerateAvatar}
+                loading={loading}
               >
                 Regenerate Avatar
               </Button>
@@ -156,9 +152,7 @@ export function PreferencesPage() {
               loading={loading}
               color={saveStatus === 'success' ? 'green' : saveStatus === 'error' ? 'red' : 'blue'}
             >
-              {saveStatus === 'success' ? 'Saved!' : 
-               saveStatus === 'error' ? 'Error Saving' : 
-               'Save Preferences'}
+              Save Changes
             </Button>
           </Group>
         </Stack>
