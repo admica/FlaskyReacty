@@ -20,6 +20,7 @@ import {
   IconLogout,
   IconSettings,
 } from '@tabler/icons-react';
+import { useState, useEffect } from 'react';
 import apiService from '../../services/api';
 
 interface NavbarLinkProps {
@@ -53,13 +54,6 @@ function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
   );
 }
 
-const getAvatarColor = (username: string) => {
-  // Generate a consistent color based on the username
-  const colors = ['blue', 'cyan', 'green', 'yellow', 'orange', 'red', 'pink', 'grape', 'violet', 'indigo'];
-  const hash = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return colors[hash % colors.length];
-};
-
 const navItems = [
   { icon: IconHome, label: 'Dashboard', path: '/dashboard' },
   { icon: IconServer2, label: 'Sensors', path: '/sensors' },
@@ -72,10 +66,26 @@ const navItems = [
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [avatarSeed, setAvatarSeed] = useState<number | null>(null);
 
   const isAdmin = localStorage.getItem('isAdmin') === 'true';
   const username = localStorage.getItem('username');
   const filteredNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
+
+  // Load user preferences to get avatar seed
+  useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const response = await apiService.get('/preferences');
+        if (response.data) {
+          setAvatarSeed(response.data.avatar_seed);
+        }
+      } catch (error) {
+        console.error('Failed to load preferences:', error);
+      }
+    };
+    loadPreferences();
+  }, []);
 
   return (
     <AppShell
@@ -102,8 +112,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <Group justify="center" gap="sm">
               <Avatar 
                 radius="xl" 
-                color={username ? getAvatarColor(username) : 'gray'}
                 size="md"
+                src={avatarSeed ? `/api/v1/avatar/${avatarSeed}?username=${username || 'U'}` : undefined}
               >
                 {username ? username[0].toUpperCase() : 'U'}
               </Avatar>

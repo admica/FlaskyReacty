@@ -10,7 +10,7 @@ import math
 
 preferences_bp = Blueprint('preferences', __name__)
 
-def generate_avatar_svg(seed: int) -> str:
+def generate_avatar_svg(seed: int, initial: str) -> str:
     """Generate a colorful geometric SVG avatar based on seed"""
     # Use seed to generate consistent colors and patterns
     rng = seed
@@ -83,7 +83,7 @@ def generate_avatar_svg(seed: int) -> str:
             points = f"{x},{y-size/2} {x+size/3},{y} {x},{y+size/2} {x-size/3},{y}"
             pattern.append(f'<polygon points="{points}" fill="{color}" />')
 
-    # Create SVG with gradient background and pattern
+    # Create SVG with gradient background, pattern, and text overlay
     svg = f'''<?xml version="1.0" encoding="UTF-8"?>
 <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
     <defs>
@@ -91,9 +91,23 @@ def generate_avatar_svg(seed: int) -> str:
             <stop offset="0%" style="stop-color:{color1};stop-opacity:1" />
             <stop offset="100%" style="stop-color:{color2};stop-opacity:1" />
         </linearGradient>
+        <filter id="shadow">
+            <feDropShadow dx="0" dy="0" stdDeviation="2" flood-opacity="0.3"/>
+        </filter>
     </defs>
     <rect width="100" height="100" fill="url(#grad)" />
     {"".join(pattern)}
+    <text
+        x="50"
+        y="50"
+        text-anchor="middle"
+        dominant-baseline="central"
+        font-family="Arial, sans-serif"
+        font-size="40"
+        font-weight="bold"
+        fill="rgba(255,255,255,0.9)"
+        filter="url(#shadow)"
+    >{initial}</text>
 </svg>'''
     
     return svg
@@ -189,8 +203,12 @@ def update_preferences():
 def get_avatar(seed):
     """Get avatar image based on seed value"""
     try:
+        # Get username from request args or default to 'U'
+        username = request.args.get('username', 'U')
+        initial = username[0].upper()
+        
         # Generate SVG avatar
-        svg_content = generate_avatar_svg(seed)
+        svg_content = generate_avatar_svg(seed, initial)
         
         # Return SVG with proper content type
         return Response(svg_content, mimetype='image/svg+xml')

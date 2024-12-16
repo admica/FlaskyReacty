@@ -134,7 +134,7 @@ export function PreferencesPage() {
                 size="xl" 
                 radius="xl"
                 color={getAvatarColor(avatarSeed)}
-                src={avatarSeed ? `/api/v1/avatar/${avatarSeed}` : undefined}
+                src={avatarSeed ? `/api/v1/avatar/${avatarSeed}?username=${username}` : undefined}
               >
                 {username[0]?.toUpperCase() || 'U'}
               </Avatar>
