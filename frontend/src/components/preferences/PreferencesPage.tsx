@@ -16,7 +16,7 @@ import apiService from '../../services/api';
 
 export function PreferencesPage() {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
-  const [avatarSeed, setAvatarSeed] = useState<number>(Math.floor(Math.random() * 1000000));
+  const [avatarSeed, setAvatarSeed] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const username = localStorage.getItem('username') || '';
