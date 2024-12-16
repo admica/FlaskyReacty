@@ -71,17 +71,60 @@ def update_preferences():
             logger.warning(f"Invalid theme value: {theme}")
             return jsonify({"error": "Invalid theme value"}), 400
 
+        # First check if user exists in preferences table
+        check_result = db("SELECT 1 FROM user_preferences WHERE username = %s", (username,))
+        if check_result:
+            logger.debug(f"User {username} exists in preferences table")
+        else:
+            logger.debug(f"User {username} not found in preferences table, will create new entry")
+
         # Update or insert preferences
-        logger.debug(f"Saving preferences - Theme: {theme}, Avatar Seed: {avatar_seed}")
-        db("""
-            INSERT INTO user_preferences (username, theme, avatar_seed, settings)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (username) 
-            DO UPDATE SET 
-                theme = EXCLUDED.theme,
-                avatar_seed = EXCLUDED.avatar_seed,
-                settings = EXCLUDED.settings
-        """, (username, theme, avatar_seed, settings))
+        logger.debug(f"Executing database operation for {username} - Theme: {theme}, Avatar Seed: {avatar_seed}")
+        try:
+            # Get a connection from the pool
+            conn = db_pool.getconn()
+            cur = conn.cursor()
+            
+            try:
+                # Execute the update
+                cur.execute("""
+                    INSERT INTO user_preferences (username, theme, avatar_seed, settings)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (username) 
+                    DO UPDATE SET 
+                        theme = EXCLUDED.theme,
+                        avatar_seed = EXCLUDED.avatar_seed,
+                        settings = EXCLUDED.settings
+                    RETURNING username, theme, avatar_seed
+                """, (username, theme, avatar_seed, settings))
+                
+                # Verify the update
+                cur.execute("SELECT theme, avatar_seed FROM user_preferences WHERE username = %s", (username,))
+                verify_result = cur.fetchone()
+                
+                if verify_result:
+                    saved_theme, saved_seed = verify_result
+                    logger.info(f"Verified saved preferences for {username} - Theme: {saved_theme}, Seed: {saved_seed}")
+                else:
+                    logger.warning(f"Could not verify saved preferences for {username}")
+                
+                # Commit the transaction
+                conn.commit()
+                logger.debug("Transaction committed successfully")
+                
+            except Exception as db_error:
+                conn.rollback()
+                logger.error(f"Database operation failed, rolling back: {db_error}")
+                logger.error(traceback.format_exc())
+                raise
+            finally:
+                cur.close()
+                db_pool.putconn(conn)
+                
+        except Exception as db_error:
+            logger.error(f"Database operation failed: {db_error}")
+            logger.error(traceback.format_exc())
+            raise
 
         logger.info(f"Successfully updated preferences for user: {username}")
         return jsonify({"message": "Preferences updated successfully"}), 200
