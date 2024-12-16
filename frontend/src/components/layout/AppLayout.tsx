@@ -8,6 +8,8 @@ import {
   Text,
   Button,
   Divider,
+  Group,
+  Avatar,
 } from '@mantine/core';
 import {
   IconHome,
@@ -50,6 +52,13 @@ function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
   );
 }
 
+const getAvatarColor = (username: string) => {
+  // Generate a consistent color based on the username
+  const colors = ['blue', 'cyan', 'green', 'yellow', 'orange', 'red', 'pink', 'grape', 'violet', 'indigo'];
+  const hash = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return colors[hash % colors.length];
+};
+
 const navItems = [
   { icon: IconHome, label: 'Dashboard', path: '/dashboard' },
   { icon: IconServer2, label: 'Sensors', path: '/sensors' },
@@ -88,9 +97,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           
           <Stack gap="xs">
             <Divider />
-            <Text size="sm" c="dimmed" ta="center">
-              Logged in as: {username}
-            </Text>
+            <Group justify="center" gap="sm">
+              <Avatar 
+                radius="xl" 
+                color={username ? getAvatarColor(username) : 'gray'}
+                size="md"
+              >
+                {username ? username[0].toUpperCase() : 'U'}
+              </Avatar>
+              <div>
+                <Text size="sm" fw={500}>
+                  {username || 'User'}
+                </Text>
+                {isAdmin && (
+                  <Text size="xs" c="dimmed">
+                    Administrator
+                  </Text>
+                )}
+              </div>
+            </Group>
             <Button
               variant="light"
               color="red"
