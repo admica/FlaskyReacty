@@ -1,6 +1,5 @@
 -- PostgreSQL database version 16.6
 -- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow, only split to make it easier to read and maintain.
--- This is Part 5 of 5: Jobs and Tasks Management System
 
 -- Name: job_status; Type: TYPE; Schema: public; Owner: pcapuser
 CREATE TYPE public.job_status AS ENUM (

@@ -1,6 +1,5 @@
 -- PostgreSQL database version 16.6
 -- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow, only split to make it easier to read and maintain.
--- This is Part 4 of 5
 
 -- Add foreign key constraints to subnet_location_map
 ALTER TABLE public.subnet_location_map

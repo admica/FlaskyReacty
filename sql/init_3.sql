@@ -1,6 +1,5 @@
 -- PostgreSQL database version 16.6
 -- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow.
--- This is Part 3 of 6: User Sessions and Triggers
 
 -- Create user sessions sequence and table
 CREATE SEQUENCE public.user_sessions_id_seq

@@ -1,6 +1,5 @@
 -- PostgreSQL database version 16.6
 -- Network mapping optimization and monitoring
--- This replaces the old subnet mapping logic with an optimized version
 
 -- Create sequence for mapping IDs
 CREATE SEQUENCE subnet_mapping_id_seq

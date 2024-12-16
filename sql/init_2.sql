@@ -1,6 +1,5 @@
 -- PostgreSQL database version 16.6
 -- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow.
--- This is Part 2 of 6: Base Tables and Sequences
 
 -- Create sequences
 CREATE SEQUENCE public.maintenance_operations_id_seq

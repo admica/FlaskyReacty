@@ -1,6 +1,5 @@
 -- PostgreSQL database version 16.6
 -- All SQL files are used to load all database entities for a fresh installation and are part of one continuous flow.
--- This is Part 1 of 6: Basic Setup and Core Functions
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
