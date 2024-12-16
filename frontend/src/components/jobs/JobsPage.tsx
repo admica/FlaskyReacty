@@ -79,6 +79,7 @@ export function JobsPage() {
     const [showDebug, setShowDebug] = useState(false);
     const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
     const messageIdCounter = useRef(0);
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     const addDebugMessage = (message: string) => {
         setDebugMessages(prev => {
@@ -87,6 +88,12 @@ export function JobsPage() {
                 timestamp: new Date().toLocaleTimeString(),
                 message
             }];
+            // Auto-scroll to bottom
+            setTimeout(() => {
+                if (scrollRef.current) {
+                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                }
+            }, 100);
             return updatedMessages;
         });
     };
@@ -316,175 +323,170 @@ export function JobsPage() {
     );
 
     return (
-        <div style={{ position: 'relative' }}>
+        <Box pos="relative" pb={50}>
             <LoadingOverlay visible={loading} />
             
-            <Group justify="space-between" mb="md">
-                <Title order={2}>Jobs</Title>
-                <Button
-                    leftSection={<IconRefresh size={16} />}
-                    variant="light"
-                    onClick={loadJobs}
-                >
-                    Refresh
-                </Button>
-            </Group>
-
             {error && (
-                <Alert 
-                    icon={<IconAlertCircle size={16} />}
-                    color="red"
-                    mb="md"
-                    title="Error"
-                    variant="light"
-                >
+                <Alert icon={<IconAlertCircle size={16} />} title="Error" color="red" mb="md">
                     {error}
                 </Alert>
             )}
 
-            {/* Filters */}
-            <Paper withBorder p="md" mb="md">
-                <Grid>
-                    <Grid.Col span={3}>
-                        <TextInput
-                            placeholder="Filter by username"
-                            value={filters.username}
-                            onChange={(e) => setFilters(f => ({ ...f, username: e.target.value }))}
-                            leftSection={<IconSearch size={16} />}
-                        />
-                    </Grid.Col>
-                    <Grid.Col span={3}>
-                        <Select
-                            placeholder="Filter by status"
-                            value={filters.status}
-                            onChange={(value) => setFilters(f => ({ ...f, status: value || '' }))}
-                            data={STATUS_OPTIONS}
-                            clearable
-                        />
-                    </Grid.Col>
-                    <Grid.Col span={3}>
-                        <TextInput
-                            placeholder="Filter by sensor"
-                            value={filters.sensor}
-                            onChange={(e) => setFilters(f => ({ ...f, sensor: e.target.value }))}
-                            leftSection={<IconSearch size={16} />}
-                        />
-                    </Grid.Col>
-                    <Grid.Col span={3}>
-                        <TextInput
-                            placeholder="Filter by description"
-                            value={filters.description}
-                            onChange={(e) => setFilters(f => ({ ...f, description: e.target.value }))}
-                            leftSection={<IconSearch size={16} />}
-                        />
-                    </Grid.Col>
-                </Grid>
-            </Paper>
+            <Paper p="md" mb="md">
+                <Group position="apart" mb="md">
+                    <Title order={2}>Jobs</Title>
+                    <Button
+                        onClick={loadJobs}
+                        leftIcon={<IconRefresh size={16} />}
+                        loading={loading}
+                    >
+                        Refresh
+                    </Button>
+                </Group>
 
-            <Paper withBorder>
-                <Box style={{ overflowX: 'auto' }}>
-                    <Table striped highlightOnHover>
-                        <Table.Thead>
-                            <Table.Tr>
-                                <Table.Th></Table.Th>
-                                <Table.Th>ID</Table.Th>
-                                <Table.Th>Status</Table.Th>
-                                <Table.Th>Description</Table.Th>
-                                <Table.Th>Time Range</Table.Th>
-                                <Table.Th>Source IP</Table.Th>
-                                <Table.Th>Dest IP</Table.Th>
-                                <Table.Th>Actions</Table.Th>
-                            </Table.Tr>
-                        </Table.Thead>
-                        <Table.Tbody>
-                            {paginatedJobs.map((job) => (
-                                <>
-                                    <Table.Tr key={job.id}>
-                                        <Table.Td>
-                                            <ActionIcon
-                                                onClick={() => toggleJobExpanded(job.id)}
-                                                variant="subtle"
-                                            >
-                                                {expandedJobIds.includes(job.id) ? 
-                                                    <IconChevronDown size={16} /> : 
-                                                    <IconChevronRight size={16} />
-                                                }
-                                            </ActionIcon>
-                                        </Table.Td>
-                                        <Table.Td>{job.id}</Table.Td>
-                                        <Table.Td>
-                                            <Badge color={getStatusColor(job.status)}>
-                                                {job.status}
-                                            </Badge>
-                                        </Table.Td>
-                                        <Table.Td>{job.description}</Table.Td>
-                                        <Table.Td>
-                                            {new Date(job.start_time).toLocaleString()} -<br/>
-                                            {new Date(job.end_time).toLocaleString()}
-                                        </Table.Td>
-                                        <Table.Td>{job.src_ip}</Table.Td>
-                                        <Table.Td>{job.dst_ip}</Table.Td>
-                                        <Table.Td>
-                                            <Group>
-                                                {job.status === 'Running' && (
-                                                    <Tooltip label="Cancel Job">
-                                                        <ActionIcon 
-                                                            color="red" 
-                                                            onClick={() => handleCancelJob(job.id)}
-                                                            disabled={!canModifyJob(job)}
-                                                        >
-                                                            <IconPlayerStop size={16} />
-                                                        </ActionIcon>
-                                                    </Tooltip>
-                                                )}
-                                                <Tooltip label="Run Similar Job">
-                                                    <ActionIcon 
-                                                        color="blue" 
-                                                        onClick={() => handleRunSimilar(job)}
-                                                    >
-                                                        <IconPlayerPlay size={16} />
-                                                    </ActionIcon>
-                                                </Tooltip>
-                                                {job.status === 'Complete' && (
-                                                    <Tooltip label="View Combined Analysis">
+                <Paper withBorder p="md" mb="md">
+                    <Grid>
+                        <Grid.Col span={3}>
+                            <TextInput
+                                placeholder="Filter by username"
+                                value={filters.username}
+                                onChange={(e) => setFilters(f => ({ ...f, username: e.target.value }))}
+                                leftSection={<IconSearch size={16} />}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={3}>
+                            <Select
+                                placeholder="Filter by status"
+                                value={filters.status}
+                                onChange={(value) => setFilters(f => ({ ...f, status: value || '' }))}
+                                data={STATUS_OPTIONS}
+                                clearable
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={3}>
+                            <TextInput
+                                placeholder="Filter by sensor"
+                                value={filters.sensor}
+                                onChange={(e) => setFilters(f => ({ ...f, sensor: e.target.value }))}
+                                leftSection={<IconSearch size={16} />}
+                            />
+                        </Grid.Col>
+                        <Grid.Col span={3}>
+                            <TextInput
+                                placeholder="Filter by description"
+                                value={filters.description}
+                                onChange={(e) => setFilters(f => ({ ...f, description: e.target.value }))}
+                                leftSection={<IconSearch size={16} />}
+                            />
+                        </Grid.Col>
+                    </Grid>
+                </Paper>
+
+                <Paper withBorder>
+                    <Box style={{ overflowX: 'auto' }}>
+                        <Table striped highlightOnHover>
+                            <Table.Thead>
+                                <Table.Tr>
+                                    <Table.Th></Table.Th>
+                                    <Table.Th>ID</Table.Th>
+                                    <Table.Th>Status</Table.Th>
+                                    <Table.Th>Description</Table.Th>
+                                    <Table.Th>Time Range</Table.Th>
+                                    <Table.Th>Source IP</Table.Th>
+                                    <Table.Th>Dest IP</Table.Th>
+                                    <Table.Th>Actions</Table.Th>
+                                </Table.Tr>
+                            </Table.Thead>
+                            <Table.Tbody>
+                                {paginatedJobs.map((job) => (
+                                    <>
+                                        <Table.Tr key={job.id}>
+                                            <Table.Td>
+                                                <ActionIcon
+                                                    onClick={() => toggleJobExpanded(job.id)}
+                                                    variant="subtle"
+                                                >
+                                                    {expandedJobIds.includes(job.id) ? 
+                                                        <IconChevronDown size={16} /> : 
+                                                        <IconChevronRight size={16} />
+                                                    }
+                                                </ActionIcon>
+                                            </Table.Td>
+                                            <Table.Td>{job.id}</Table.Td>
+                                            <Table.Td>
+                                                <Badge color={getStatusColor(job.status)}>
+                                                    {job.status}
+                                                </Badge>
+                                            </Table.Td>
+                                            <Table.Td>{job.description}</Table.Td>
+                                            <Table.Td>
+                                                {new Date(job.start_time).toLocaleString()} -<br/>
+                                                {new Date(job.end_time).toLocaleString()}
+                                            </Table.Td>
+                                            <Table.Td>{job.src_ip}</Table.Td>
+                                            <Table.Td>{job.dst_ip}</Table.Td>
+                                            <Table.Td>
+                                                <Group>
+                                                    {job.status === 'Running' && (
+                                                        <Tooltip label="Cancel Job">
+                                                            <ActionIcon 
+                                                                color="red" 
+                                                                onClick={() => handleCancelJob(job.id)}
+                                                                disabled={!canModifyJob(job)}
+                                                            >
+                                                                <IconPlayerStop size={16} />
+                                                            </ActionIcon>
+                                                        </Tooltip>
+                                                    )}
+                                                    <Tooltip label="Run Similar Job">
                                                         <ActionIcon 
                                                             color="blue" 
-                                                            onClick={() => handleViewAnalysis(job.id)}
+                                                            onClick={() => handleRunSimilar(job)}
                                                         >
-                                                            <IconFileAnalytics size={16} />
+                                                            <IconPlayerPlay size={16} />
                                                         </ActionIcon>
                                                     </Tooltip>
-                                                )}
-                                                <Tooltip label="Delete Job">
-                                                    <ActionIcon 
-                                                        color="red" 
-                                                        onClick={() => handleDeleteJob(job.id)}
-                                                        disabled={!canModifyJob(job)}
-                                                    >
-                                                        <IconTrash size={16} />
-                                                    </ActionIcon>
-                                                </Tooltip>
-                                            </Group>
-                                        </Table.Td>
-                                    </Table.Tr>
-                                    {expandedJobIds.includes(job.id) && job.tasks.map(task => 
-                                        renderTaskRow(task, job.id)
-                                    )}
-                                </>
-                            ))}
-                        </Table.Tbody>
-                    </Table>
-                </Box>
+                                                    {job.status === 'Complete' && (
+                                                        <Tooltip label="View Combined Analysis">
+                                                            <ActionIcon 
+                                                                color="blue" 
+                                                                onClick={() => handleViewAnalysis(job.id)}
+                                                            >
+                                                                <IconFileAnalytics size={16} />
+                                                            </ActionIcon>
+                                                        </Tooltip>
+                                                    )}
+                                                    <Tooltip label="Delete Job">
+                                                        <ActionIcon 
+                                                            color="red" 
+                                                            onClick={() => handleDeleteJob(job.id)}
+                                                            disabled={!canModifyJob(job)}
+                                                        >
+                                                            <IconTrash size={16} />
+                                                        </ActionIcon>
+                                                    </Tooltip>
+                                                </Group>
+                                            </Table.Td>
+                                        </Table.Tr>
+                                        {expandedJobIds.includes(job.id) && job.tasks.map(task => 
+                                            renderTaskRow(task, job.id)
+                                        )}
+                                    </>
+                                ))}
+                            </Table.Tbody>
+                        </Table>
+                    </Box>
 
-                {totalPages > 1 && (
-                    <Group justify="center" mt="md">
-                        <Pagination
-                            total={totalPages}
-                            value={currentPage}
-                            onChange={setCurrentPage}
-                        />
-                    </Group>
-                )}
+                    {totalPages > 1 && (
+                        <Group justify="center" mt="md">
+                            <Pagination
+                                total={totalPages}
+                                value={currentPage}
+                                onChange={setCurrentPage}
+                            />
+                        </Group>
+                    )}
+                </Paper>
             </Paper>
 
             <Box
@@ -498,38 +500,53 @@ export function JobsPage() {
                     alignItems: 'flex-end',
                     justifyContent: 'flex-end',
                     padding: '20px',
+                    zIndex: 1000,
                 }}
+                onMouseEnter={() => setShowDebug(true)}
             >
-                <HoverCard width={400} shadow="md">
-                    <HoverCard.Target>
-                        <Box style={{ width: '100%', height: '100%' }} />
-                    </HoverCard.Target>
-                    <HoverCard.Dropdown
+                {showDebug ? (
+                    <Paper
+                        shadow="md"
                         style={{
+                            position: 'absolute',
+                            bottom: '20px',
+                            right: '20px',
+                            width: '400px',
                             background: 'rgba(0, 0, 0, 0.8)',
                             backdropFilter: 'blur(4px)',
                             border: 'none',
-                            width: '400px',
                         }}
                     >
-                        <Stack gap="xs">
+                        <Stack gap="xs" p="xs">
                             <Group justify="space-between">
                                 <Text size="xs" fw={500} c="dimmed">Debug Log ({debugMessages.length} messages)</Text>
-                                <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
+                                <Group gap="xs">
+                                    <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
+                                    <ActionIcon 
+                                        size="xs" 
+                                        variant="subtle" 
+                                        c="dimmed"
+                                        onClick={() => setShowDebug(false)}
+                                    >
+                                        ×
+                                    </ActionIcon>
+                                </Group>
                             </Group>
-                            <ScrollArea h={250} scrollbarSize={8}>
+                            <ScrollArea h={250} scrollbarSize={8} viewportRef={scrollRef}>
                                 <Stack gap={4}>
                                     {debugMessages.map(msg => (
-                                        <Text key={msg.id} size="xs" c="dimmed">
+                                        <Text key={msg.id} size="xs" c="dimmed" style={{ fontFamily: 'monospace' }}>
                                             [{msg.timestamp}] {msg.message}
                                         </Text>
                                     ))}
                                 </Stack>
                             </ScrollArea>
                         </Stack>
-                    </HoverCard.Dropdown>
-                </HoverCard>
+                    </Paper>
+                ) : (
+                    <Box style={{ width: '100%', height: '100%' }} />
+                )}
             </Box>
-        </div>
+        </Box>
     );
 } 
