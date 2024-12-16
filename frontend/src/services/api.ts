@@ -531,6 +531,25 @@ const apiService = {
         } catch (error: any) {
             throw logApiError('Error fetching connections', error);
         }
+    },
+
+    // Preferences endpoints
+    get: async (endpoint: string) => {
+        try {
+            const response = await api.get(endpoint);
+            return response;
+        } catch (error: any) {
+            throw logApiError(`Error fetching ${endpoint}`, error);
+        }
+    },
+
+    post: async (endpoint: string, data: any) => {
+        try {
+            const response = await api.post(endpoint, data);
+            return response;
+        } catch (error: any) {
+            throw logApiError(`Error posting to ${endpoint}`, error);
+        }
     }
 };
 

@@ -10,8 +10,6 @@ import {
   Button,
   Divider,
   Avatar,
-  Center,
-  Flex,
 } from '@mantine/core';
 import { IconMoonStars, IconSun, IconRefresh } from '@tabler/icons-react';
 import apiService from '../../services/api';
@@ -25,8 +23,10 @@ const getAvatarColor = (seed: number | null) => {
 
 export function PreferencesPage() {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
-  const [avatarSeed, setAvatarSeed] = useState<number | null>(null);
+  const [avatarSeed, setAvatarSeed] = useState<number>(Math.floor(Math.random() * 1000000));
   const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState({});
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const username = localStorage.getItem('username') || '';
 
   // Load preferences from backend when component mounts
@@ -36,20 +36,16 @@ export function PreferencesPage() {
 
   const loadUserPreferences = async () => {
     try {
-      const response = await apiService.get('/api/v1/preferences');
-      if (response.ok) {
-        const prefs = await response.json();
-        console.log('Loaded preferences from backend:', prefs);
-        
-        // Update both state and localStorage
-        setTheme(prefs.theme || 'dark');
-        localStorage.setItem('theme', prefs.theme || 'dark');
-        
-        setAvatarSeed(prefs.avatar_seed);
-      } else {
-        const errorData = await response.json();
-        console.error('Failed to load preferences:', errorData.error);
-      }
+      const response = await apiService.get('/preferences');
+      console.log('Loaded preferences from backend:', response.data);
+      
+      setTheme(response.data.theme || 'dark');
+      // Ensure avatar_seed is never null
+      setAvatarSeed(response.data.avatar_seed || Math.floor(Math.random() * 1000000));
+      setSettings(response.data.settings || {});
+      
+      // Update localStorage for theme
+      localStorage.setItem('theme', response.data.theme || 'dark');
     } catch (error) {
       console.error('Failed to load preferences:', error);
     }
@@ -57,69 +53,42 @@ export function PreferencesPage() {
 
   const savePreferences = async () => {
     setLoading(true);
+    setSaveStatus('idle');
     try {
-      const response = await apiService.post('/api/v1/preferences', {
+      // Ensure we have a valid avatar_seed before saving
+      const currentSeed = avatarSeed || Math.floor(Math.random() * 1000000);
+      setAvatarSeed(currentSeed);
+
+      const response = await apiService.post('/preferences', {
         theme,
-        avatar_seed: avatarSeed,
+        avatar_seed: currentSeed,
+        settings: {}
       });
 
-      if (response.ok) {
-        console.log('Preferences saved successfully to backend');
-        // Update localStorage after successful backend save
-        localStorage.setItem('theme', theme);
-        // Verify the save by reloading preferences
-        await loadUserPreferences();
-      } else {
-        const errorData = await response.json();
-        console.error('Failed to save preferences:', errorData.error);
-        throw new Error(errorData.error || 'Failed to save preferences');
-      }
-    } catch (error) {
-      console.error('Failed to save preferences:', error);
+      console.log('Preferences saved successfully to backend');
+      localStorage.setItem('theme', theme);
+      setSaveStatus('success');
+      // Verify the save by reloading preferences
+      await loadUserPreferences();
+    } catch (error: any) {
+      console.error('Failed to save preferences:', error.response?.data?.error || error.message);
+      setSaveStatus('error');
     } finally {
       setLoading(false);
+      // Reset save status after 3 seconds
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
   };
 
-  const handleThemeChange = async (newTheme: string) => {
+  const handleThemeChange = (newTheme: string) => {
     setTheme(newTheme);
-    // Save to backend immediately when theme changes
-    try {
-      const response = await apiService.post('/api/v1/preferences', {
-        theme: newTheme,
-        avatar_seed: avatarSeed,
-      });
-
-      if (response.ok) {
-        console.log('Theme preference saved to backend');
-        localStorage.setItem('theme', newTheme);
-      } else {
-        console.error('Failed to save theme preference to backend');
-      }
-    } catch (error) {
-      console.error('Failed to save theme preference:', error);
-    }
+    // Don't save immediately, wait for user to click save
   };
 
-  const regenerateAvatar = async () => {
+  const regenerateAvatar = () => {
     const newSeed = Math.floor(Math.random() * 1000000);
     setAvatarSeed(newSeed);
-    
-    // Save new avatar seed to backend immediately
-    try {
-      const response = await apiService.post('/api/v1/preferences', {
-        theme,
-        avatar_seed: newSeed,
-      });
-
-      if (response.ok) {
-        console.log('New avatar seed saved to backend');
-      } else {
-        console.error('Failed to save new avatar seed');
-      }
-    } catch (error) {
-      console.error('Failed to save avatar seed:', error);
-    }
+    // Don't save immediately, wait for user to click save
   };
 
   return (
@@ -185,8 +154,11 @@ export function PreferencesPage() {
             <Button
               onClick={savePreferences}
               loading={loading}
+              color={saveStatus === 'success' ? 'green' : saveStatus === 'error' ? 'red' : 'blue'}
             >
-              Save Preferences
+              {saveStatus === 'success' ? 'Saved!' : 
+               saveStatus === 'error' ? 'Error Saving' : 
+               'Save Preferences'}
             </Button>
           </Group>
         </Stack>

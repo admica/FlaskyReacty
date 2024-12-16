@@ -235,6 +235,70 @@ class SensorTestSuite(TestSuite):
         else:
             print("[yellow]No sensors found - skipping sensor-specific tests[/yellow]")
 
+class PreferencesTestSuite(TestSuite):
+    """Test suite for user preferences endpoints"""
+    def __init__(self, api):
+        super().__init__("Preferences Tests")
+        self.api = api
+
+    def run(self) -> None:
+        """Run all preferences tests"""
+        print("\n[bold]Running Preferences Tests[/bold]")
+
+        # Test 1: Get current preferences
+        print("Running: Get Current Preferences")
+        result = self.api.get_preferences()
+        self.add_result(TestResult(
+            "Get Current Preferences",
+            result.get('success', False),
+            result.get('response'),
+            result.get('error')
+        ))
+
+        if not result.get('success'):
+            print("[red]Failed to get preferences - skipping remaining tests[/red]")
+            return
+
+        # Get current theme
+        current_theme = result['response'].get('theme', 'dark')
+        new_theme = 'light' if current_theme == 'dark' else 'dark'
+
+        # Test 2: Update theme
+        print(f"Running: Update Theme from {current_theme} to {new_theme}")
+        update_result = self.api.update_preferences({
+            'theme': new_theme,
+            'avatar_seed': result['response'].get('avatar_seed')
+        })
+        self.add_result(TestResult(
+            f"Update Theme to {new_theme}",
+            update_result.get('success', False),
+            update_result.get('response'),
+            update_result.get('error')
+        ))
+
+        # Test 3: Verify theme change
+        print("Running: Verify Theme Change")
+        verify_result = self.api.get_preferences()
+        self.add_result(TestResult(
+            "Verify Theme Change",
+            verify_result.get('success', False) and verify_result['response'].get('theme') == new_theme,
+            verify_result.get('response'),
+            verify_result.get('error')
+        ))
+
+        # Test 4: Revert theme
+        print(f"Running: Revert Theme back to {current_theme}")
+        revert_result = self.api.update_preferences({
+            'theme': current_theme,
+            'avatar_seed': result['response'].get('avatar_seed')
+        })
+        self.add_result(TestResult(
+            f"Revert Theme to {current_theme}",
+            revert_result.get('success', False),
+            revert_result.get('response'),
+            revert_result.get('error')
+        ))
+
 class PCAPServerAPI:
     """Main API testing class"""
     def __init__(self, base_url: str):
@@ -384,6 +448,21 @@ class PCAPServerAPI:
             f"/api/v1/sensors/{sensor_name}/devices"
         )
 
+    def get_preferences(self) -> Dict:
+        """Get user preferences"""
+        return self.request(
+            "GET",
+            "/api/v1/preferences"
+        )
+
+    def update_preferences(self, preferences: Dict) -> Dict:
+        """Update user preferences"""
+        return self.request(
+            "POST",
+            "/api/v1/preferences",
+            data=preferences
+        )
+
 def main():
     """Main test runner"""
     # Get base URL from command line or use default
@@ -408,6 +487,11 @@ def main():
         sensor_suite = SensorTestSuite(api)
         sensor_suite.run()
         sensor_suite.print_results()
+
+        # Run preferences tests (requires auth from previous suite)
+        preferences_suite = PreferencesTestSuite(api)
+        preferences_suite.run()
+        preferences_suite.print_results()
 
     except KeyboardInterrupt:
         print("\n[yellow]Tests interrupted by user[/yellow]")
