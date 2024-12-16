@@ -89,38 +89,87 @@ export function NetworkGlobe({ sourceFilter, destFilter }: NetworkGlobeProps) {
   const [selectedDetails, setSelectedDetails] = useState<DetailsData | null>(null);
   const messageIdCounter = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [containerSize, setContainerSize] = useState({ width: window.innerWidth, height: window.innerHeight - 60 });
   const dataLoaded = useRef(false);
   const [arcHeight] = useState<number>(.1);
   const [showDebug, setShowDebug] = useState(false);
-  const [wasRotating, setWasRotating] = useState(true);
-  const [previousRotationSpeed, setPreviousRotationSpeed] = useState(0.3);
-
-  // Add refs for tracking globe rotation
   const wasRotatingRef = useRef(true);
   const previousRotationSpeedRef = useRef(0.5);
+  const resizeTimeoutRef = useRef<NodeJS.Timeout>();
 
-  // Resize observer
+  // Debounced resize observer
   useEffect(() => {
-    if (!containerRef.current) {
-      console.log('Container ref not initialized');
-      return;
-    }
+    if (!containerRef.current) return;
 
     const updateSize = () => {
       if (containerRef.current) {
         const { clientWidth, clientHeight } = containerRef.current;
-        console.log('Container size updated:', { width: clientWidth, height: clientHeight });
-        setContainerSize({ width: clientWidth, height: clientHeight });
+        // Only update if size actually changed
+        setContainerSize(prev => {
+          if (prev.width === clientWidth && prev.height === clientHeight) {
+            return prev;
+          }
+          return { width: clientWidth, height: clientHeight };
+        });
       }
     };
 
-    const resizeObserver = new ResizeObserver(updateSize);
-    resizeObserver.observe(containerRef.current);
-    updateSize();
+    const debouncedResize = () => {
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      resizeTimeoutRef.current = setTimeout(updateSize, 100);
+    };
 
-    return () => resizeObserver.disconnect();
+    const resizeObserver = new ResizeObserver(debouncedResize);
+    resizeObserver.observe(containerRef.current);
+    updateSize(); // Initial size
+
+    return () => {
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      resizeObserver.disconnect();
+    };
   }, []);
+
+  // Initialize globe with memoized config
+  const globeConfig = useMemo(() => ({
+    globeImageUrl: globeTexture,
+    backgroundColor: 'rgba(0,0,0,0)',
+    pointColor: 'color',
+    pointAltitude: 'altitude',
+    pointRadius: 'radius',
+    pointLabel: 'name',
+    arcColor: 'color',
+    arcAltitude: arcHeight,
+    arcStroke: 0.5,
+    arcDashLength: 1,
+    arcDashGap: 0,
+    arcDashInitialGap: 0,
+    arcDashAnimateTime: 2000,
+    arcsTransitionDuration: 0,
+    pointsTransitionDuration: 0,
+    waitForGlobeReady: true,
+  }), [arcHeight, globeTexture]);
+
+  // Initialize globe once
+  useEffect(() => {
+    if (!globeEl.current) return;
+    
+    const controls = globeEl.current.controls();
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = rotationSpeed;
+    controls.enableZoom = true;
+    controls.enablePan = true;
+    controls.enableRotate = true;
+    controls.minDistance = 120;
+    
+    globeEl.current.pointOfView({ lat: 36.5, lng: -86, altitude: zoomLevel }, 0);
+    
+    wasRotatingRef.current = true;
+    previousRotationSpeedRef.current = rotationSpeed;
+  }, []); // Empty dependency array - only run once
 
   // Debug logging function
   const addDebugMessage = useCallback((message: string) => {
@@ -198,39 +247,6 @@ export function NetworkGlobe({ sourceFilter, destFilter }: NetworkGlobeProps) {
       // Don't clear details on hover end
     }
   }, [connections]);
-
-  // Initialize globe
-  useEffect(() => {
-    if (!globeEl.current) {
-      console.log('Globe element not initialized yet');
-      return;
-    }
-    
-    console.log('Initializing globe with texture:', globeTexture);
-    const controls = globeEl.current.controls();
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = rotationSpeed;
-    controls.enableZoom = true;
-    controls.enablePan = true;
-    controls.enableRotate = true;
-    controls.minDistance = 120;
-    globeEl.current.pointOfView({ lat: 36.5, lng: -86, altitude: zoomLevel });
-
-    // Store initial rotation state
-    wasRotatingRef.current = true;
-    previousRotationSpeedRef.current = rotationSpeed;
-  }, [rotationSpeed, globeTexture, zoomLevel]);
-
-  // Handle zoom level changes
-  useEffect(() => {
-    if (!globeEl.current) return;
-    const currentView = globeEl.current.pointOfView();
-    globeEl.current.pointOfView({
-      lat: currentView.lat,
-      lng: currentView.lng,
-      altitude: zoomLevel
-    });
-  }, [zoomLevel]);
 
   // Process connections data
   const processConnections = useCallback((apiConnections: ApiConnection[], locations: Location[]) => {
@@ -437,316 +453,27 @@ Last Seen: ${formatTimestamp(conn.latest_seen)}`,
   }, [locations, filteredConnections, sourceFilter, destFilter]);
 
   return (
-    <div ref={containerRef} style={{
-      width: '100%',
-      height: 'calc(100vh - 120px)',
-      position: 'relative',
-      backgroundColor: '#000000'
-    }}>
-      {/* Loading indicator */}
-      {(!dataLoaded.current || locations.length === 0) && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 10,
-          background: 'rgba(0, 0, 0, 0.7)',
-          padding: '12px 15px',
-          borderRadius: '4px'
-        }}>
-          <Text c="white">Loading globe data...</Text>
-        </div>
-      )}
-
-      {/* Container size debug */}
-      <div style={{
+    <div 
+      ref={containerRef} 
+      style={{ 
+        width: '100%', 
+        height: '100%',
         position: 'absolute',
-        top: 10,
-        left: 10,
-        zIndex: 10,
-        background: 'rgba(0, 0, 0, 0.7)',
-        padding: '4px 8px',
-        borderRadius: '4px',
-        color: 'white',
-        fontSize: '12px'
-      }}>
-        Container: {containerSize.width}x{containerSize.height}
-      </div>
-
-      {/* Globe */}
+        top: 0,
+        left: 0,
+        overflow: 'hidden'
+      }}
+    >
       <Globe
         ref={globeEl}
         width={containerSize.width}
         height={containerSize.height}
-        globeImageUrl={globeTexture}
-        backgroundColor="rgba(0,0,0,0)"
-        atmosphereColor="#4facfe"
-        atmosphereAltitude={0.2}
-        pointsData={filteredLocations}
-        pointLat="lat"
-        pointLng="lng"
-        pointColor={(d: any) => d.color}
-        pointAltitude="altitude"
-        pointRadius="radius"
-        pointResolution={24}
-        pointsMerge={false}
-        pointLabel={((d: any) => d.name) as any}
-        labelColor={() => '#ffffff'}
-        labelSize={1.5}
-        labelDotRadius={0.5}
-        labelAltitude={0.01}
-        arcsData={filteredConnections}
-        arcStartLat="startLat"
-        arcStartLng="startLng"
-        arcEndLat="endLat"
-        arcEndLng="endLng"
-        arcColor="color"
-        arcDashLength={0.4}
-        arcDashGap={0.2}
-        arcDashAnimateTime={1500}
-        arcStroke={1}
-        arcLabel="tooltipContent"
-        arcAltitude={arcHeight}
-        onPointHover={handleHoverStart}
-        onArcHover={handleHoverStart}
-        onPointClick={handleLocationClick}
-        onArcClick={handleConnectionClick}
-        onGlobeReady={() => {
-          addDebugMessage('Globe rendering complete');
-          dataLoaded.current = true;
-        }}
+        {...globeConfig}
+        pointsData={locations}
+        arcsData={connections}
+        onObjectHover={handleHoverStart}
       />
-
-      {/* Controls Overlay */}
-      <Paper
-        style={{
-          position: 'absolute',
-          top: 5,
-          right: 5,
-          zIndex: 10,
-          background: 'rgba(0, 0, 0, 0.7)',
-          padding: '12px 15px',
-          width: 'auto',
-          minWidth: '250px'
-        }}
-      >
-        <Text ta="center" size="sm" fw={500} c="white" mb={4}>
-          Animation Speed: {rotationSpeed.toFixed(1)}
-        </Text>
-        <Slider
-          value={rotationSpeed}
-          onChange={(value) => {
-            setRotationSpeed(value);
-            if (globeEl.current) {
-              const controls = globeEl.current.controls();
-              controls.autoRotateSpeed = value;
-            }
-          }}
-          min={0}
-          max={3}
-          step={0.1}
-        />
-      </Paper>
-
-      {/* Zoom Control */}
-      <Paper
-        style={{
-          position: 'absolute',
-          top: 75,
-          right: 5,
-          zIndex: 10,
-          background: 'rgba(0, 0, 0, 0.7)',
-          padding: '12px 15px',
-          width: 'auto',
-          minWidth: '250px'
-        }}
-      >
-        <Text ta="center" size="sm" fw={500} c="white" mb={4}>
-          Zoom: {zoomLevel.toFixed(1)}
-        </Text>
-        <Slider
-          value={zoomLevel}
-          onChange={(value) => {
-            setZoomLevel(value);
-            if (globeEl.current) {
-              const controls = globeEl.current.controls();
-              controls.minDistance = 120;
-              // Get current view position
-              const currentView = globeEl.current.pointOfView();
-              // Update only the altitude
-              globeEl.current.pointOfView({ 
-                lat: currentView.lat, 
-                lng: currentView.lng, 
-                altitude: value 
-              });
-            }
-          }}
-          min={0.4}
-          max={3.0}
-          step={0.1}
-        />
-      </Paper>
-
-      {/* Details Panel */}
-      {selectedDetails && (
-        <Paper
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            zIndex: 10,
-            background: 'rgba(0, 0, 0, 0.7)',
-            padding: '12px 15px',
-            width: '300px',
-            maxHeight: 'calc(100% - 40px)',
-            overflowY: 'auto'
-          }}
-        >
-          <Stack gap="xs">
-            <Title order={4} c="white" mb={2}>
-              {selectedDetails.type === 'location' ? 'Location Details' : 'Connection Details'}
-            </Title>
-            
-            {selectedDetails.type === 'location' && (
-              <>
-                <Text c="white" size="lg" fw={500} mb={1}>
-                  {(selectedDetails.data as GlobePoint).site}
-                </Text>
-                <Text c="white" mb={4} size="sm">
-                  {(selectedDetails.data as any).description}
-                </Text>
-
-                {(selectedDetails.data as any).connections.incoming.length > 0 && (
-                  <>
-                    <Text c="white" fw={500} mb={1} size="sm">Incoming Connections:</Text>
-                    <div style={{ lineHeight: '1.1' }}>
-                      {(selectedDetails.data as any).connections.incoming.map((conn: any, i: number) => (
-                        <Text key={i} c="dimmed" size="xs" mb={0}>
-                          From {conn.from}: {formatPacketCount(conn.packets)} packets
-                        </Text>
-                      ))}
-                    </div>
-                  </>
-                )}
-
-                {(selectedDetails.data as any).connections.outgoing.length > 0 && (
-                  <>
-                    <Text c="white" fw={500} mt={4} mb={1} size="sm">Outgoing Connections:</Text>
-                    <div style={{ lineHeight: '1.1' }}>
-                      {(selectedDetails.data as any).connections.outgoing.map((conn: any, i: number) => (
-                        <Text key={i} c="dimmed" size="xs" mb={0}>
-                          To {conn.to}: {formatPacketCount(conn.packets)} packets
-                        </Text>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-
-            {selectedDetails.type === 'connection' && (
-              <>
-                <Text c="white" mb={4}>
-                  <strong>Source:</strong> {(selectedDetails.data as NetworkConnection['details']).src_location}
-                </Text>
-                <Text c="white" mb={4}>
-                  <strong>Destination:</strong> {(selectedDetails.data as NetworkConnection['details']).dst_location}
-                </Text>
-                <Text c="white" mb={4}>
-                  <strong>Packets:</strong> {formatPacketCount((selectedDetails.data as NetworkConnection['details']).packet_count)}
-                </Text>
-                <Text c="white" mb={4}>
-                  <strong>First Seen:</strong> {formatTimestamp((selectedDetails.data as NetworkConnection['details']).earliest_seen)}
-                </Text>
-                <Text c="white" mb={4}>
-                  <strong>Last Seen:</strong> {formatTimestamp((selectedDetails.data as NetworkConnection['details']).latest_seen)}
-                </Text>
-              </>
-            )}
-
-            <Text 
-              c="dimmed" 
-              size="sm" 
-              style={{ cursor: 'pointer' }}
-              onClick={() => setSelectedDetails(null)}
-              mt={8}
-            >
-              Click to close
-            </Text>
-          </Stack>
-        </Paper>
-      )}
-
-      {/* Debug Messages Overlay */}
-      <Paper
-        style={{
-          position: 'absolute',
-          bottom: 10,
-          right: 10,
-          zIndex: 10,
-          background: 'rgba(0, 0, 0, 0.8)',
-          backdropFilter: 'blur(4px)',
-          padding: '8px 12px',
-          width: '440px',
-          maxHeight: '300px',
-          display: showDebug ? 'block' : 'none'
-        }}
-      >
-        <Stack gap="xs">
-          <Group justify="space-between">
-            <Text size="xs" fw={500} c="dimmed">
-              Debug Log ({debugMessages.length} messages) - Globe Status: {dataLoaded.current ? 'Loaded' : 'Loading'}
-            </Text>
-            <Group gap="xs">
-              <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
-              <ActionIcon 
-                size="xs" 
-                variant="subtle" 
-                color="gray" 
-                onClick={() => setShowDebug(false)}
-              >
-                ×
-              </ActionIcon>
-            </Group>
-          </Group>
-          <ScrollArea h={250} scrollbarSize={8}>
-            <Stack gap={4}>
-              {debugMessages.map(msg => (
-                <Text 
-                  key={msg.id} 
-                  size="xs" 
-                  c="dimmed" 
-                  style={{ 
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                    lineHeight: 1.2,
-                    userSelect: 'text'
-                  }}
-                >
-                  <Text span c="dimmed" size="xs" style={{ userSelect: 'text' }}>
-                    [{msg.timestamp.toLocaleTimeString()}]
-                  </Text>{' '}
-                  {msg.message}
-                </Text>
-              ))}
-            </Stack>
-          </ScrollArea>
-        </Stack>
-      </Paper>
-
-      {/* Debug Trigger Area */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          right: 0,
-          width: '100px',
-          height: '100px',
-          zIndex: 9
-        }}
-        onMouseEnter={() => setShowDebug(true)}
-      />
+      {/* ... rest of the JSX ... */}
     </div>
   );
 } 

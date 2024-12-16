@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Container,
-  Title,
   Paper,
   Stack,
   Group,
@@ -13,6 +11,7 @@ import {
   Box,
   ActionIcon,
   ScrollArea,
+  Title,
 } from '@mantine/core';
 import { IconMoonStars, IconSun, IconRefresh } from '@tabler/icons-react';
 import apiService from '../../services/api';
@@ -138,76 +137,74 @@ export function PreferencesPage() {
 
   return (
     <Box pos="relative" pb={50}>
-      <Container size="md">
+      <Paper p="md">
         <Title order={2} mb="lg">User Preferences</Title>
 
-        <Paper withBorder p="md" radius="md">
-          <Stack gap="lg">
-            <div>
-              <Text fw={500} mb="xs">Theme</Text>
-              <SegmentedControl
-                value={theme}
-                onChange={handleThemeChange}
-                data={[
-                  {
-                    value: 'dark',
-                    label: (
-                      <Stack gap={2} align="center">
-                        <IconMoonStars size={16} />
-                        <Text size="sm">Dark</Text>
-                      </Stack>
-                    ),
-                  },
-                  {
-                    value: 'light',
-                    label: (
-                      <Stack gap={2} align="center">
-                        <IconSun size={16} />
-                        <Text size="sm">Light</Text>
-                      </Stack>
-                    ),
-                  },
-                ]}
-              />
-            </div>
+        <Stack>
+          <div>
+            <Text fw={500} mb="xs">Theme</Text>
+            <SegmentedControl
+              value={theme}
+              onChange={handleThemeChange}
+              data={[
+                {
+                  value: 'dark',
+                  label: (
+                    <Stack gap={2} align="center">
+                      <IconMoonStars size={16} />
+                      <Text size="sm">Dark</Text>
+                    </Stack>
+                  ),
+                },
+                {
+                  value: 'light',
+                  label: (
+                    <Stack gap={2} align="center">
+                      <IconSun size={16} />
+                      <Text size="sm">Light</Text>
+                    </Stack>
+                  ),
+                },
+              ]}
+            />
+          </div>
 
-            <Divider />
+          <Divider />
 
-            <div>
-              <Text fw={500} mb="xs">Avatar</Text>
-              <Group>
-                <Avatar 
-                  size="xl" 
-                  radius="xl"
-                  src={avatarSeed ? `/api/v1/avatar/${avatarSeed}?username=${username}` : undefined}
-                >
-                  {username[0]?.toUpperCase() || 'U'}
-                </Avatar>
-                <Button 
-                  variant="light"
-                  leftSection={<IconRefresh size={16} />}
-                  onClick={regenerateAvatar}
-                  loading={loading}
-                >
-                  Regenerate Avatar
-                </Button>
-              </Group>
-            </div>
-
-            <Divider />
-
-            <Group justify="flex-end">
-              <Button
-                onClick={savePreferences}
-                loading={loading}
-                color={saveStatus === 'success' ? 'green' : saveStatus === 'error' ? 'red' : 'blue'}
+          <div>
+            <Text fw={500} mb="xs">Avatar</Text>
+            <Group>
+              <Avatar 
+                size="xl" 
+                radius="xl"
+                src={avatarSeed ? `/api/v1/avatar/${avatarSeed}?username=${username}` : undefined}
               >
-                Save Changes
+                {username[0]?.toUpperCase() || 'U'}
+              </Avatar>
+              <Button 
+                variant="light"
+                leftSection={<IconRefresh size={16} />}
+                onClick={regenerateAvatar}
+                loading={loading}
+              >
+                Regenerate Avatar
               </Button>
             </Group>
-          </Stack>
-        </Paper>
-      </Container>
+          </div>
+
+          <Divider />
+
+          <Group justify="flex-end">
+            <Button
+              onClick={savePreferences}
+              loading={loading}
+              color={saveStatus === 'success' ? 'green' : saveStatus === 'error' ? 'red' : 'blue'}
+            >
+              Save Changes
+            </Button>
+          </Group>
+        </Stack>
+      </Paper>
 
       <Box
         style={{
