@@ -30,12 +30,6 @@ export function MainNav({
       >
         Sensors
       </Link>
-      <Link
-        to="/settings"
-        className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-      >
-        Settings
-      </Link>
     </nav>
   )
 }

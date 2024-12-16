@@ -2,6 +2,21 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
+
+// Get the host's network interfaces
+const getHostIp = () => {
+  const interfaces = os.networkInterfaces();
+  for (const iface of Object.values(interfaces)) {
+    if (!iface) continue;
+    for (const alias of iface) {
+      if (alias.family === 'IPv4' && !alias.internal) {
+        return alias.address;
+      }
+    }
+  }
+  return 'localhost';
+};
 
 export default defineConfig({
   plugins: [react()],
@@ -27,7 +42,8 @@ export default defineConfig({
     strictPort: true,
     hmr: {
       protocol: 'wss',
-      host: 'localhost'
+      host: getHostIp(),
+      clientPort: 5173
     }
   },
   resolve: {
