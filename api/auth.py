@@ -101,12 +101,25 @@ def get_user_role(username):
             logger.debug(f"Test user {username} assigned role: {test_role}")
             return test_role
 
-        # Check admin_users table for role
+        # Check if user is a local user
+        local_users = config.items('LOCAL_USERS')
+        for local_username, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if username == user_data.get('username'):
+                    role = user_data.get('role', 'user')
+                    logger.debug(f"Local user {username} assigned role: {role}")
+                    return role
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON in LOCAL_USERS config for {local_username}")
+                continue
+
+        # If not a local user, check admin_users table for LDAP user role
         result = db("SELECT EXISTS(SELECT 1 FROM admin_users WHERE username = %s)", (username,))
         is_admin = result[0][0] if result else False
 
         role = 'admin' if is_admin else 'user'
-        logger.debug(f"User {username} assigned role: {role}")
+        logger.debug(f"LDAP user {username} assigned role: {role}")
         return role
 
     except Exception as e:
@@ -248,91 +261,68 @@ def login():
         if not username or not password:
             return jsonify({"error": "Username and password required"}), 400
 
-        # Clean username if domain provided
-        if '\\' in username:
-            username = username.split('\\')[-1]
+        # First try local user authentication
+        local_users = config.items('LOCAL_USERS')
+        for local_username, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if username == user_data.get('username'):
+                    stored_password = user_data.get('password')
+                    if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
+                        logger.info(f"Local user authentication successful: {username}")
+                        role = user_data.get('role', 'user')
+                        # Create tokens and session
+                        access_token = create_access_token(
+                            identity=username,
+                            additional_claims={'role': role}
+                        )
+                        refresh_token = create_refresh_token(identity=username)
+                        session_token = create_user_session(username)
 
-        # Rate limiting check
-        rate_limit_key = f"login_attempts:{username}"
-        attempts = int(redis_client.get(rate_limit_key) or 0)
-        if attempts >= 5:  # Max 5 attempts per 15 minutes
-            remaining = redis_client.ttl(rate_limit_key)
-            return jsonify({
-                "error": "Too many login attempts",
-                "retry_after_seconds": remaining
-            }), 429
+                        if not session_token:
+                            return jsonify({"error": "Failed to create session"}), 500
 
-        user_authenticated = False
-        role = None
+                        return jsonify({
+                            'access_token': access_token,
+                            'refresh_token': refresh_token,
+                            'session_token': session_token,
+                            'role': role
+                        }), 200
+                    else:
+                        logger.warning(f"Invalid password for local user: {username}")
+                        return jsonify({"error": "Invalid credentials"}), 401
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON in LOCAL_USERS config for {local_username}")
+                continue
 
-        # Check local users first
-        try:
-            local_users = config.items('LOCAL_USERS')
-            for username_key, user_json in local_users:
-                user = json.loads(user_json)
-                if user['username'].lower() == username.lower():
-                    if bcrypt.checkpw(password.encode(), user['password'].encode()):
-                        user_authenticated = True
-                        role = user.get('role', 'user')
-                        break
-        except Exception as e:
-            logger.error(f"Local authentication error: {e}")
-
-        # If not found locally, try LDAP
-        if not user_authenticated:
-            if ldap_authenticate(username, password):
-                user_authenticated = True
-                role = get_user_role(username)
-
-        if user_authenticated and role:
-            # First cleanup any existing sessions
-            db("""
-                DELETE FROM user_sessions
-                WHERE username = %s
-            """, (username,))
-
-            # Generate tokens
-            refresh_token = create_refresh_token(identity=username)
+        # If not a local user, try LDAP authentication
+        if ldap_authenticate(username, password):
+            # Get role from admin_users table for LDAP users
+            role = get_user_role(username)
+            
+            # Create tokens and session
             access_token = create_access_token(
                 identity=username,
                 additional_claims={'role': role}
             )
+            refresh_token = create_refresh_token(identity=username)
+            session_token = create_user_session(username)
 
-            # Store refresh token
-            refresh_expires = int(config.get('JWT', 'refresh_token_expires'))
-            redis_client.setex(
-                f"refresh_token:{username}",
-                refresh_expires,
-                refresh_token
-            )
+            if not session_token:
+                return jsonify({"error": "Failed to create session"}), 500
 
-            # Reset failed login attempts
-            redis_client.delete(rate_limit_key)
-
-            # Create user session
-            session_id = create_user_session(username)
-            if not session_id:
-                logger.error(f"Failed to create session for user: {username}")
-
-            logger.info(f"Successful login for user: {username}")
             return jsonify({
                 'access_token': access_token,
                 'refresh_token': refresh_token,
+                'session_token': session_token,
                 'role': role
             }), 200
 
-        # Increment failed login attempts
-        pipe = redis_client.pipeline()
-        pipe.incr(rate_limit_key)
-        pipe.expire(rate_limit_key, 900)  # 15 minutes expiry
-        pipe.execute()
-
-        logger.warning(f"Failed login attempt for user: {username}")
         return jsonify({"error": "Invalid credentials"}), 401
 
     except Exception as e:
-        logger.error(f"Login error: {str(e)}")
-        return jsonify({"error": "Authentication failed"}), 500
+        logger.error(f"Login error: {e}")
+        return jsonify({"error": "Login failed"}), 500
 
 @auth_bp.route('/api/v1/refresh', methods=['POST'])
 @jwt_required(refresh=True)

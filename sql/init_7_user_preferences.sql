@@ -3,7 +3,7 @@
 -- The settings column uses JSONB for flexible extension of user preferences without schema changes
 
 CREATE TABLE IF NOT EXISTS user_preferences (
-    username VARCHAR(255) PRIMARY KEY REFERENCES admin_users(username) ON DELETE CASCADE,
+    username VARCHAR(255) PRIMARY KEY,  -- Store preferences for any authenticated user
     avatar_seed INTEGER NOT NULL DEFAULT floor(random() * 1000000),  -- For consistent avatar generation
     theme VARCHAR(50) DEFAULT 'dark',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -30,12 +30,20 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger to automatically update login stats when a new session is created
-DROP TRIGGER IF EXISTS user_login_trigger ON user_sessions;
-CREATE TRIGGER user_login_trigger
-    AFTER INSERT ON user_sessions
-    FOR EACH ROW
-    EXECUTE FUNCTION update_user_login_stats();
+-- Create trigger for user login tracking (if it doesn't exist)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgname = 'user_login_trigger'
+    ) THEN
+        CREATE TRIGGER user_login_trigger
+        AFTER INSERT ON user_sessions
+        FOR EACH ROW
+        EXECUTE FUNCTION update_user_login_stats();
+    END IF;
+END $$;
 
 -- Grant appropriate permissions
 GRANT SELECT, INSERT, UPDATE ON user_preferences TO pcapuser;
