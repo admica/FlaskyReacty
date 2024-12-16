@@ -1,6 +1,6 @@
 // PATH: src/components/jobs/JobsPage.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Table,
@@ -22,6 +22,8 @@ import {
     Modal,
     Stack,
     Collapse,
+    ScrollArea,
+    HoverCard,
 } from '@mantine/core';
 import { useModals } from '@mantine/modals';
 import {
@@ -49,6 +51,12 @@ const STATUS_OPTIONS = [
     { value: 'Incomplete', label: 'Incomplete' },
 ];
 
+interface DebugMessage {
+    id: number;
+    message: string;
+    timestamp: string;
+}
+
 export function JobsPage() {
     const [jobs, setJobs] = useState<Job[]>([]);
     const [loading, setLoading] = useState(true);
@@ -68,18 +76,44 @@ export function JobsPage() {
         description: '',
     });
 
+    const [showDebug, setShowDebug] = useState(false);
+    const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
+    const messageIdCounter = useRef(0);
+
+    const addDebugMessage = (message: string) => {
+        setDebugMessages(prev => {
+            const updatedMessages = [...prev.slice(-99), {
+                id: messageIdCounter.current++,
+                timestamp: new Date().toLocaleTimeString(),
+                message
+            }];
+            return updatedMessages;
+        });
+    };
+
+    useEffect(() => {
+        (window as any).addDebugMessage = addDebugMessage;
+        return () => {
+            delete (window as any).addDebugMessage;
+        };
+    }, []);
+
     const canModifyJob = (job: Job) => {
         return isAdmin || job.username === currentUser;
     };
 
     const loadJobs = async () => {
         try {
+            addDebugMessage('Fetching jobs...');
             setLoading(true);
             const data = await apiService.getJobs();
             setJobs(data);
             setError(null);
+            addDebugMessage(`Successfully fetched ${data.length} jobs`);
         } catch (err: any) {
-            setError(err.error || 'Failed to load jobs');
+            const errorMessage = err.error || 'Failed to load jobs';
+            setError(errorMessage);
+            addDebugMessage(`Error loading jobs: ${errorMessage}`);
             console.error('Error loading jobs:', err);
         } finally {
             setLoading(false);
@@ -110,19 +144,27 @@ export function JobsPage() {
 
     const handleCancelJob = async (jobId: number) => {
         try {
+            addDebugMessage(`Cancelling job ${jobId}...`);
             await apiService.cancelJob(jobId);
+            addDebugMessage(`Successfully cancelled job ${jobId}`);
             await loadJobs();
         } catch (err: any) {
-            setError(err.error || 'Failed to cancel job');
+            const errorMessage = err.error || 'Failed to cancel job';
+            setError(errorMessage);
+            addDebugMessage(`Error cancelling job ${jobId}: ${errorMessage}`);
         }
     };
 
     const handleCancelTask = async (jobId: number, sensor: string) => {
         try {
+            addDebugMessage(`Cancelling task for job ${jobId} on sensor ${sensor}...`);
             await apiService.cancelTask(jobId, sensor);
+            addDebugMessage(`Successfully cancelled task for job ${jobId} on sensor ${sensor}`);
             await loadJobs();
         } catch (err: any) {
-            setError(err.error || 'Failed to cancel task');
+            const errorMessage = err.error || 'Failed to cancel task';
+            setError(errorMessage);
+            addDebugMessage(`Error cancelling task: ${errorMessage}`);
         }
     };
 
@@ -444,6 +486,50 @@ export function JobsPage() {
                     </Group>
                 )}
             </Paper>
+
+            <Box
+                style={{
+                    position: 'fixed',
+                    bottom: 0,
+                    right: 0,
+                    width: '200px',
+                    height: '100px',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'flex-end',
+                    padding: '20px',
+                }}
+            >
+                <HoverCard width={400} shadow="md">
+                    <HoverCard.Target>
+                        <Box style={{ width: '100%', height: '100%' }} />
+                    </HoverCard.Target>
+                    <HoverCard.Dropdown
+                        style={{
+                            background: 'rgba(0, 0, 0, 0.8)',
+                            backdropFilter: 'blur(4px)',
+                            border: 'none',
+                            width: '400px',
+                        }}
+                    >
+                        <Stack gap="xs">
+                            <Group justify="space-between">
+                                <Text size="xs" fw={500} c="dimmed">Debug Log ({debugMessages.length} messages)</Text>
+                                <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
+                            </Group>
+                            <ScrollArea h={250} scrollbarSize={8}>
+                                <Stack gap={4}>
+                                    {debugMessages.map(msg => (
+                                        <Text key={msg.id} size="xs" c="dimmed">
+                                            [{msg.timestamp}] {msg.message}
+                                        </Text>
+                                    ))}
+                                </Stack>
+                            </ScrollArea>
+                        </Stack>
+                    </HoverCard.Dropdown>
+                </HoverCard>
+            </Box>
         </div>
     );
 } 
