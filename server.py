@@ -40,6 +40,7 @@ from api.search import search_bp
 from api.sensors import sensors_bp
 from api.storage import storage_bp
 from api.subnet_mapping import subnet_mapping_bp
+from api.preferences import preferences_bp
 
 # Import network maintenance
 from api.network_tasks import maintenance_thread
@@ -157,6 +158,7 @@ app.register_blueprint(search_bp)
 app.register_blueprint(sensors_bp)
 app.register_blueprint(storage_bp)
 app.register_blueprint(subnet_mapping_bp)
+app.register_blueprint(preferences_bp)
 
 # Register cleanup handlers
 atexit.register(cleanup_handler)
