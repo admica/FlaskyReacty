@@ -70,9 +70,7 @@ function App() {
           path="/preferences"
           element={
             <ProtectedRoute>
-              <AppLayout>
-                <PreferencesPage />
-              </AppLayout>
+              <PreferencesPage />
             </ProtectedRoute>
           }
         />
