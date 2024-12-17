@@ -34,14 +34,33 @@ Target Users:
 - DevOps engineers
 
 ## Code Style and Structure
+
 Frontend:
 - Write concise, technical TypeScript code with accurate examples
 - Use functional and declarative programming patterns; avoid classes
 - Prefer iteration and modularization over code duplication
 - Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError)
 - Structure repository files as follows:
+
 Backend:
-- ?
+- Use Flask Blueprints for API organization
+- Implement proper request validation with type hints
+- Use raw SQL with parameterized queries (no ORM)
+- Follow a modular database initialization approach (numbered SQL files)
+- Implement proper error handling and logging
+- Use configuration files for environment settings
+- Implement proper cleanup handlers for graceful shutdown
+- Use Redis for caching and token management
+- Implement proper subprocess and thread management for background tasks
+- Use type hints for function parameters and returns
+- Keep endpoint handlers focused on:
+  - Request validation
+  - Parameter processing
+  - Error handling
+  - Response formatting
+- Follow RESTful API patterns for endpoints
+- Use JWT for authentication with proper token management
+
 ```
 pcapserver/
 ├── api/               # Backend API endpoints
@@ -80,16 +99,31 @@ pcapserver/
 
 ### Backend
 - Python 3.11+
-- Flask
+- Flask 3.1 with blueprints
+- Redis 5 (for token mgmt and caching)
 - JWT for authentication
-- PostgreSQL 16
+- PostgreSQL 16 with raw SQL (no ORM)
+- Protected routes and session mgmt
+- No FastAPI
 
 ### Frontend
-- React
-- TypeScript
+- React 18.2
+- TypeScript 5.2
+- Vite 5.0
+- Mantine 7.3 (core UI components)
+- Radix UI (low-level components)
 - Tailwind CSS
-- Mantine
-- Shadcn UI
+- React Router 6.20
+- Three.js and react-globe.gl (for network visualization)
+- Axios for API calls
+- No Redux
+
+### Architecture
+- Distributed system with remote sensors
+- Job/task management system
+- Network visualization
+- Real-time monitoring
+- Role-based access control
 
 ## Naming Conventions
 - Use lowercase with underscores for directories (e.g., components/form-wizard)
