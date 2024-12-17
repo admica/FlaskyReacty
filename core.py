@@ -130,7 +130,7 @@ def rate_limit():
                 from cache_utils import redis_client
                 # Check rate limit
                 attempts = int(redis_client.get(rate_limit_key) or 0)
-                if attempts >= 5000:  # Allow more requests
+                if attempts >= 3000:  # Allow more requests
                     remaining = redis_client.ttl(rate_limit_key)
                     return jsonify({
                         "error": "Rate limit exceeded",
