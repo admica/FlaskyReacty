@@ -11,6 +11,7 @@ import {
   Group,
   Avatar,
   useMantineTheme,
+  useMantineColorScheme,
   rgba,
 } from '@mantine/core';
 import {
@@ -34,6 +35,7 @@ interface NavbarLinkProps {
 
 function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
   const theme = useMantineTheme();
+  const { colorScheme } = useMantineColorScheme();
   
   return (
     <UnstyledButton
@@ -45,19 +47,19 @@ function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
         padding: '8px',
         borderRadius: '6px',
         backgroundColor: active ? 
-          theme.colorScheme === 'dark' ? 
+          colorScheme === 'dark' ? 
             rgba(theme.colors.blue[9], 0.25) : 
             rgba(theme.colors.blue[0], 0.35) : 
           'transparent',
         color: active ? 
-          theme.colorScheme === 'dark' ? 
+          colorScheme === 'dark' ? 
             theme.colors.blue[4] : 
             theme.colors.blue[7] : 
-          theme.colorScheme === 'dark' ? 
-            theme.white : 
+          colorScheme === 'dark' ? 
+            theme.colors.dark[0] : 
             theme.colors.gray[7],
         '&:hover': {
-          backgroundColor: theme.colorScheme === 'dark' ? 
+          backgroundColor: colorScheme === 'dark' ? 
             rgba(theme.colors.blue[9], 0.15) : 
             rgba(theme.colors.blue[0], 0.25),
         },

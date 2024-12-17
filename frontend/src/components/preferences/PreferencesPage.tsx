@@ -23,9 +23,10 @@ interface DebugMessage {
 }
 
 export function PreferencesPage() {
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState<string | null>(null);
   const [avatarSeed, setAvatarSeed] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const username = localStorage.getItem('username') || '';
   
@@ -69,15 +70,27 @@ export function PreferencesPage() {
       addDebugMessage('Loaded preferences from backend: ' + JSON.stringify(response.data));
       
       if (response.data) {
-        setTheme(response.data.theme || 'dark');
-        localStorage.setItem('theme', response.data.theme || 'dark');
+        const backendTheme = response.data.theme || 'dark';
+        setTheme(backendTheme);
+        localStorage.setItem('theme', backendTheme);
         setAvatarSeed(response.data.avatar_seed || Math.floor(Math.random() * 1000000));
-        addDebugMessage('Applied preferences: theme=' + response.data.theme + ', avatar_seed=' + response.data.avatar_seed);
+        addDebugMessage('Applied preferences: theme=' + backendTheme + ', avatar_seed=' + response.data.avatar_seed);
+      } else {
+        // Only use localStorage if backend has no data
+        const localTheme = localStorage.getItem('theme') || 'dark';
+        setTheme(localTheme);
+        addDebugMessage('Using local theme preference: ' + localTheme);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       addDebugMessage('Failed to load preferences: ' + errorMessage);
       console.error('Failed to load preferences:', error);
+      // On error, fall back to localStorage
+      const localTheme = localStorage.getItem('theme') || 'dark';
+      setTheme(localTheme);
+      addDebugMessage('Using local theme preference after error: ' + localTheme);
+    } finally {
+      setPreferencesLoaded(true);
     }
   };
 
@@ -136,37 +149,41 @@ export function PreferencesPage() {
   };
 
   return (
-    <Box pos="relative" pb={50}>
-      <Paper p="md">
+    <Box pos="relative" pb={50} pl={0}>
+      <Paper p="md" radius={0} style={{ borderLeft: 0 }}>
         <Title order={2} mb="lg">User Preferences</Title>
 
         <Stack>
           <div>
             <Text fw={500} mb="xs">Theme</Text>
-            <SegmentedControl
-              value={theme}
-              onChange={handleThemeChange}
-              data={[
-                {
-                  value: 'dark',
-                  label: (
-                    <Stack gap={2} align="center">
-                      <IconMoonStars size={16} />
-                      <Text size="sm">Dark</Text>
-                    </Stack>
-                  ),
-                },
-                {
-                  value: 'light',
-                  label: (
-                    <Stack gap={2} align="center">
-                      <IconSun size={16} />
-                      <Text size="sm">Light</Text>
-                    </Stack>
-                  ),
-                },
-              ]}
-            />
+            {preferencesLoaded && theme ? (
+              <SegmentedControl
+                value={theme}
+                onChange={handleThemeChange}
+                data={[
+                  {
+                    value: 'dark',
+                    label: (
+                      <Stack gap={2} align="center">
+                        <IconMoonStars size={16} />
+                        <Text size="sm">Dark</Text>
+                      </Stack>
+                    ),
+                  },
+                  {
+                    value: 'light',
+                    label: (
+                      <Stack gap={2} align="center">
+                        <IconSun size={16} />
+                        <Text size="sm">Light</Text>
+                      </Stack>
+                    ),
+                  },
+                ]}
+              />
+            ) : (
+              <Text size="sm" c="dimmed">Loading theme preferences...</Text>
+            )}
           </div>
 
           <Divider />
