@@ -42,7 +42,7 @@ class DeviceTest(BaseTest):
             raise Exception("No sensors available for testing")
         
         # Store first online sensor for testing
-        self.test_sensor = next(
+        self.sensor_name = next(
             (s['name'] for s in sensors if s['status'] == 'Online'),
             sensors[0]['name']  # Fallback to first sensor if none online
         )
@@ -50,14 +50,14 @@ class DeviceTest(BaseTest):
         self.add_result(TestResult(
             "Setup - Login and get sensor",
             True,
-            {"sensor": self.test_sensor}
+            {"sensor": self.sensor_name}
         ))
 
     def test_01_get_devices(self):
         """Test getting devices for a sensor"""
         result = self.request(
             "GET",
-            f"/api/v1/sensors/{self.test_sensor}/devices",
+            f"/api/v1/sensors/{self.sensor_name}/devices",
             auth=True,
             auth_token=self.access_token
         )
@@ -71,7 +71,7 @@ class DeviceTest(BaseTest):
             if not all(k in data for k in ['devices', 'count', 'sensor']):
                 success = False
                 error = "Missing required fields in response"
-            elif data['sensor'] != self.test_sensor:
+            elif data['sensor'] != self.sensor_name:
                 success = False
                 error = f"Wrong sensor in response: {data['sensor']}"
             elif data['devices']:
@@ -109,7 +109,7 @@ class DeviceTest(BaseTest):
                         break
         
         self.add_result(TestResult(
-            f"Get devices for sensor {self.test_sensor}",
+            f"Get devices for sensor {self.sensor_name}",
             success,
             result['response'],
             error or result.get('error')
