@@ -12,6 +12,7 @@ import {
   ActionIcon,
   ScrollArea,
   Title,
+  useMantineColorScheme,
 } from '@mantine/core';
 import { IconMoonStars, IconSun, IconRefresh } from '@tabler/icons-react';
 import apiService from '../../services/api';
@@ -29,6 +30,7 @@ export function PreferencesPage() {
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const username = localStorage.getItem('username') || '';
+  const { setColorScheme } = useMantineColorScheme();
   
   const [showDebug, setShowDebug] = useState(false);
   const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
@@ -110,6 +112,7 @@ export function PreferencesPage() {
 
       addDebugMessage('Preferences saved successfully');
       localStorage.setItem('theme', theme);
+      setColorScheme(theme as 'light' | 'dark');
       setSaveStatus('success');
       await loadUserPreferences();
     } catch (error: any) {
@@ -127,6 +130,7 @@ export function PreferencesPage() {
     addDebugMessage('Changing theme to: ' + newTheme);
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
+    setColorScheme(newTheme as 'light' | 'dark');
     
     try {
       await apiService.post('/preferences', {
