@@ -19,6 +19,7 @@ import pkgutil
 from typing import List, Type, Optional
 from rich.console import Console
 from rich.table import Table
+from tests.base import BaseTest
 
 # Initialize rich console
 console = Console()
@@ -57,7 +58,10 @@ class TestRunner:
                     for item_name in dir(module):
                         if item_name.endswith('Test'):
                             test_class = getattr(module, item_name)
-                            if isinstance(test_class, type):
+                            # Only include classes that inherit from BaseTest but aren't BaseTest itself
+                            if (isinstance(test_class, type) and
+                                issubclass(test_class, BaseTest) and
+                                test_class != BaseTest):
                                 test_classes.append(test_class)
                 except Exception as e:
                     console.print(f"[red]Error loading test file {file_name}: {str(e)}[/red]")
@@ -70,7 +74,10 @@ class TestRunner:
                         for item_name in dir(module):
                             if item_name.endswith('Test'):
                                 test_class = getattr(module, item_name)
-                                if isinstance(test_class, type):
+                                # Only include classes that inherit from BaseTest but aren't BaseTest itself
+                                if (isinstance(test_class, type) and 
+                                    issubclass(test_class, BaseTest) and 
+                                    test_class != BaseTest):
                                     test_classes.append(test_class)
                     except Exception as e:
                         console.print(f"[red]Error loading module {name}: {str(e)}[/red]")
