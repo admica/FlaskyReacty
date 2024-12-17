@@ -4,13 +4,14 @@ PCAP Server Test Runner
 Discovers and runs test suites from the tests directory.
 
 Usage:
-    ./run_tests.py [base_url] [test_files...]
+    ./run_tests.py [base_url] [test_files...] [--max=N]
     
 Examples:
-    ./run_tests.py                               # Run all tests with default URL
-    ./run_tests.py https://localhost:3000        # Run all tests with specific URL
-    ./run_tests.py test_auth.py                  # Run only auth tests with default URL
-    ./run_tests.py test_auth.py test_sensors.py  # Run specific test files
+    ./run_tests.py                         # Run all tests with default URL
+    ./run_tests.py https://localhost:3000  # Run all tests with specific URL
+    ./run_tests.py test_auth.py            # Run only auth tests with default URL
+    ./run_tests.py test_auth test_sensors  # Run specific test files
+    ./run_tests.py --max=1000              # Set maximum output length to 1000 chars
 """
 import os
 import sys
@@ -27,8 +28,9 @@ console = Console()
 class TestRunner:
     """Main test runner that discovers and executes test suites"""
     
-    def __init__(self, base_url: str = "https://localhost:3000"):
+    def __init__(self, base_url: str = "https://localhost:3000", max_output_length: int = 150):
         self.base_url = base_url
+        self.max_output_length = max_output_length
         self.results = []
     
     def discover_tests(self, specific_files: Optional[List[str]] = None) -> List[Type]:
@@ -126,6 +128,12 @@ class TestRunner:
             except Exception as e:
                 console.print(f"[red]Error running {test_class.__name__}: {str(e)}[/red]")
     
+    def truncate_text(self, text: str) -> str:
+        """Truncate text to max_output_length, adding ellipsis if needed"""
+        if not text or len(text) <= self.max_output_length:
+            return text
+        return text[:self.max_output_length] + "..."
+
     def print_summary(self) -> None:
         """Print test execution summary"""
         if not self.results:
@@ -147,10 +155,10 @@ class TestRunner:
             
             details = ""
             if result.error:
-                details = f"[red]{result.error}[/red]"
+                details = f"[red]{self.truncate_text(str(result.error))}[/red]"
             elif result.response:
                 try:
-                    details = str(result.response)
+                    details = self.truncate_text(str(result.response))
                 except:
                     details = "Unable to format response"
             
@@ -165,21 +173,49 @@ class TestRunner:
         success_rate = (success_count / total * 100) if total > 0 else 0
         console.print(f"\nSuccess Rate: {success_rate:.1f}% ({success_count}/{total})")
 
+        # Print failed test details with truncated output
+        failed_tests = [r for r in self.results if not r.success]
+        if failed_tests:
+            console.print("\n[bold red]Failed Tests Details:[/bold red]")
+            for test in failed_tests:
+                console.print(f"\n[bold]{test.name}[/bold]")
+                if test.error:
+                    console.print(f"Error: {self.truncate_text(str(test.error))}")
+                if test.response:
+                    console.print("Response:")
+                    try:
+                        if isinstance(test.response, dict):
+                            response_str = str(test.response)
+                            console.print(self.truncate_text(response_str))
+                        else:
+                            console.print(self.truncate_text(str(test.response)))
+                    except:
+                        console.print("Unable to format response")
+
 def main():
     """Main entry point"""
     args = sys.argv[1:]
     base_url = "https://localhost:3000"
     test_files = []
+    max_output_length = 150 # Default number of lines
     
     # Parse arguments
-    for arg in args:
+    i = 0
+    while i < len(args):
+        arg = args[i]
         if arg.startswith('http'):
             base_url = arg
+        elif arg.startswith('--max='):
+            try:
+                max_output_length = int(arg.split('=')[1])
+            except (IndexError, ValueError):
+                console.print("[red]Invalid --max value. Using default.[/red]")
         elif arg.endswith('.py') or arg.startswith('test_'):
             test_files.append(arg)
+        i += 1
     
     try:
-        runner = TestRunner(base_url)
+        runner = TestRunner(base_url, max_output_length)
         runner.run(test_files if test_files else None)
         runner.print_summary()
     
