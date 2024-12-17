@@ -54,7 +54,7 @@ function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
             theme.colors.blue[4] : 
             theme.colors.blue[7] : 
           theme.colorScheme === 'dark' ? 
-            theme.colors.gray[0] : 
+            theme.white : 
             theme.colors.gray[7],
         '&:hover': {
           backgroundColor: theme.colorScheme === 'dark' ? 

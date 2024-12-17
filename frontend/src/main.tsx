@@ -82,6 +82,14 @@ const theme = createTheme({
               ? theme.colors.blue[4]
               : theme.colors.blue[7],
           },
+          color: colorScheme === 'dark'
+            ? theme.colors.dark[0]
+            : theme.colors.gray[7],
+          '&:hover': {
+            backgroundColor: colorScheme === 'dark'
+              ? theme.fn.rgba(theme.colors.blue[9], 0.15)
+              : theme.fn.rgba(theme.colors.blue[0], 0.25),
+          },
         }),
       },
     },
@@ -91,7 +99,7 @@ const theme = createTheme({
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <MantineProvider theme={theme} defaultColorScheme="dark">
+      <MantineProvider theme={theme} defaultColorScheme={localStorage.getItem('theme') || 'dark'}>
         <ModalsProvider>
           <App />
         </ModalsProvider>
