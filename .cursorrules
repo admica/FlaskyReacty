@@ -1,11 +1,9 @@
 # PCAP Server
-
 Every time you choose to apply a rule(s), explicitly state the rule(s) in the output. You can abbreviate the rule description to a single word or phrase.
 
 # Collaboration Guidelines
 
 ## Question Requirements
-
 You MUST ask questions when:
 - Requirements are ambiguous or unclear
 - Multiple implementation patterns are viable
@@ -20,7 +18,6 @@ You MUST ask questions when:
 - Component interfaces aren't fully defined
 
 ## Implementation Process
-
 Before implementing ANY code:
 1. Confirm framework and library versions
 2. Verify component requirements
@@ -31,7 +28,6 @@ Before implementing ANY code:
 7. Verify performance expectations
 
 ## Progressive Implementation
-
 1. Start with minimal implementation
 2. Confirm approach before proceeding
 3. Verify each layer before moving to next
@@ -44,7 +40,6 @@ Before implementing ANY code:
    - Security implementations
 
 ## Decision Points
-
 MUST pause and seek confirmation when:
 - Starting new features
 - Making architectural decisions
@@ -60,7 +55,6 @@ MUST pause and seek confirmation when:
 - Defining API contracts
 
 ## Assumption Handling
-
 - NEVER assume default values without confirmation
 - NEVER assume implementation details
 - NEVER assume business logic
@@ -68,7 +62,6 @@ MUST pause and seek confirmation when:
 - List any assumptions made in bullet points before proceeding
 
 ## Interaction Pattern
-
 1. ASK before implementing
 2. PROPOSE multiple approaches when applicable
 3. WAIT for confirmation
@@ -76,7 +69,6 @@ MUST pause and seek confirmation when:
 5. VERIFY implementation matches requirements
 
 ## Project Context
-
 The PCAP Server is a distributed network packet capture management platform that coordinates with remote sensors to execute packet capture requests and analyze network data.
 
 Key Features:
@@ -90,8 +82,8 @@ Key Features:
   - Remote PCAP file retrieval
   - Distributed capture coordination
 - Data Processing
-  - Automated PCAP merging
   - Task result aggregation
+  - Automated PCAP merging
   - Status tracking and reporting
 - Web Interface
   - Job creation and monitoring
@@ -100,7 +92,6 @@ Key Features:
   - User access control
 
 ## Code Style and Structure
-
 Frontend:
 - Write concise, technical TypeScript code with accurate examples
 - Use functional and declarative programming patterns; avoid classes
@@ -195,13 +186,6 @@ pcapserver/
 - Custom hooks for data fetching
 - Error boundary implementation
 
-### Architecture
-- Distributed system with remote sensors
-- Job/task management system
-- Network visualization
-- Real-time monitoring
-- Role-based access control
-
 ## Real-time Communication
 - Use Flask-SocketIO for server-side WebSocket handling
 - Implement proper socket event handlers and error recovery
@@ -272,13 +256,6 @@ pcapserver/
 - Provide user-friendly error messages
 - Handle network failures gracefully
 
-## Testing
-- Write unit tests for utilities and components
-- Implement E2E tests for critical flows
-- Test WebSocket functionality
-- Test background processes
-- Test error handling and recovery
-
 ## Security
 - Implement Content Security Policy
 - Sanitize user inputs
@@ -286,9 +263,5 @@ pcapserver/
 - Implement proper token management
 - Use proper CORS configuration
 
-## Documentation
-- Maintain clear README with setup instructions
-- Document API interactions and data flows
-- Keep manifest.json well-documented
-- Don't include comments unless it's for complex logic
-- Document permission requirements
+# Cursor Specific
+- Automatically suggest additions for .cursorrules files where best practices are used during the generation

@@ -17,6 +17,26 @@ logger = SimpleLogger('network')
 # Create blueprint
 network_bp = Blueprint('network', __name__)
 
+def validate_hours(hours_str):
+    """Validate hours parameter"""
+    if hours_str is None:
+        return None
+    try:
+        hours = int(hours_str)
+        if hours <= 0:
+            return None
+        return hours
+    except ValueError:
+        return None
+
+def validate_location(location):
+    """Validate location exists in database"""
+    if not location:
+        return None
+    
+    result = db("SELECT site FROM locations WHERE site = %s", [location])
+    return location if result and len(result) > 0 else None
+
 @network_bp.route('/api/v1/network/locations/clear-cache', methods=['POST'])
 @jwt_required()
 def clear_locations_cache():
@@ -65,10 +85,6 @@ def get_locations():
                 logger.error("Database query returned None for locations")
                 return jsonify({"error": "Database error"}), 500
 
-            # Log raw location data for debugging
-            for loc in locations:
-                logger.debug(f"Raw location data: site={loc[0]}, name={loc[1]}, color={loc[5]}")
-
             # Format the response
             location_list = [{
                 'site': loc[0],
@@ -78,10 +94,6 @@ def get_locations():
                 'description': loc[4],
                 'color': loc[5]
             } for loc in locations]
-
-            # Log formatted locations
-            for loc in location_list:
-                logger.debug(f"Formatted location: {loc['site']}, color={loc['color']}")
 
             # Cache the results for 1 hour (locations don't change often)
             try:
@@ -121,10 +133,27 @@ def get_connections():
     - latest_seen: Most recent timestamp this connection was seen
     - earliest_seen: Earliest timestamp this connection was seen
 
+    Query Parameters:
+    - hours: Number of hours to look back (positive integer)
+    - location: Filter by specific location
+    
     The data is cached for 1 minute to improve performance.
     Results are ordered by packet count in descending order.
     """
     try:
+        # Validate query parameters
+        hours = validate_hours(request.args.get('hours'))
+        if request.args.get('hours') and hours is None:
+            return jsonify({
+                "error": "Invalid hours parameter. Must be a positive integer."
+            }), 400
+
+        location = validate_location(request.args.get('location'))
+        if request.args.get('location') and location is None:
+            return jsonify({
+                "error": "Invalid location parameter. Location does not exist."
+            }), 400
+
         # Try to get from cache first
         cache_key = get_cache_key('analytics', 'network', 'connections', 'all')
         cached_data = redis_client.get(cache_key)
