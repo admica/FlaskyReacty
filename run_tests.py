@@ -2,12 +2,21 @@
 """
 PCAP Server Test Runner
 Discovers and runs test suites from the tests directory.
+
+Usage:
+    ./run_tests.py [base_url] [test_files...]
+    
+Examples:
+    ./run_tests.py                               # Run all tests with default URL
+    ./run_tests.py https://localhost:3000        # Run all tests with specific URL
+    ./run_tests.py test_auth.py                  # Run only auth tests with default URL
+    ./run_tests.py test_auth.py test_sensors.py  # Run specific test files
 """
 import os
 import sys
 import importlib
 import pkgutil
-from typing import List, Type
+from typing import List, Type, Optional
 from rich.console import Console
 from rich.table import Table
 
@@ -21,8 +30,11 @@ class TestRunner:
         self.base_url = base_url
         self.results = []
     
-    def discover_tests(self) -> List[Type]:
-        """Discover all test classes in the tests directory"""
+    def discover_tests(self, specific_files: Optional[List[str]] = None) -> List[Type]:
+        """
+        Discover test classes in the tests directory.
+        If specific_files is provided, only load those test files.
+        """
         test_classes = []
         tests_dir = os.path.join(os.path.dirname(__file__), 'tests')
         
@@ -34,25 +46,40 @@ class TestRunner:
         # Add tests directory to Python path
         sys.path.insert(0, os.path.dirname(__file__))
         
-        # Import all test modules
-        for _, name, _ in pkgutil.iter_modules([tests_dir]):
-            if name.startswith('test_'):
+        if specific_files:
+            # Load only specified test files
+            for file_name in specific_files:
+                # Strip .py extension if present
+                module_name = file_name[:-3] if file_name.endswith('.py') else file_name
                 try:
-                    module = importlib.import_module(f'tests.{name}')
+                    module = importlib.import_module(f'tests.{module_name}')
                     # Look for classes that end with 'Test'
                     for item_name in dir(module):
                         if item_name.endswith('Test'):
                             test_class = getattr(module, item_name)
-                            if isinstance(test_class, type):  # Ensure it's a class
+                            if isinstance(test_class, type):
                                 test_classes.append(test_class)
                 except Exception as e:
-                    console.print(f"[red]Error loading module {name}: {str(e)}[/red]")
+                    console.print(f"[red]Error loading test file {file_name}: {str(e)}[/red]")
+        else:
+            # Load all test files
+            for _, name, _ in pkgutil.iter_modules([tests_dir]):
+                if name.startswith('test_'):
+                    try:
+                        module = importlib.import_module(f'tests.{name}')
+                        for item_name in dir(module):
+                            if item_name.endswith('Test'):
+                                test_class = getattr(module, item_name)
+                                if isinstance(test_class, type):
+                                    test_classes.append(test_class)
+                    except Exception as e:
+                        console.print(f"[red]Error loading module {name}: {str(e)}[/red]")
         
         return test_classes
     
-    def run(self) -> None:
-        """Run all discovered tests"""
-        test_classes = self.discover_tests()
+    def run(self, specific_files: Optional[List[str]] = None) -> None:
+        """Run discovered tests"""
+        test_classes = self.discover_tests(specific_files)
         
         if not test_classes:
             console.print("[yellow]No test classes found![/yellow]")
@@ -72,7 +99,7 @@ class TestRunner:
                     test_instance.setup()
                 
                 # Run all test methods
-                for method_name in dir(test_instance):
+                for method_name in sorted(dir(test_instance)):
                     if method_name.startswith('test_'):
                         method = getattr(test_instance, method_name)
                         console.print(f"\nRunning: {method_name}")
@@ -133,12 +160,20 @@ class TestRunner:
 
 def main():
     """Main entry point"""
-    # Get base URL from command line or use default
-    base_url = sys.argv[1] if len(sys.argv) > 1 else "https://localhost:3000"
+    args = sys.argv[1:]
+    base_url = "https://localhost:3000"
+    test_files = []
+    
+    # Parse arguments
+    for arg in args:
+        if arg.startswith('http'):
+            base_url = arg
+        elif arg.endswith('.py') or arg.startswith('test_'):
+            test_files.append(arg)
     
     try:
         runner = TestRunner(base_url)
-        runner.run()
+        runner.run(test_files if test_files else None)
         runner.print_summary()
     
     except KeyboardInterrupt:

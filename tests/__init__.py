@@ -1,3 +1,3 @@
 """
-PCAP Server Test Suite
+Test package for PCAP Server
 """ 
