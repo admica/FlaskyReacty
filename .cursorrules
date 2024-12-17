@@ -27,7 +27,6 @@ Key Features:
   - User access control
 
 Target Users:
-
 - Network forensics investigators
 - Security analysts
 - Network administrators
@@ -40,6 +39,9 @@ Frontend:
 - Use functional and declarative programming patterns; avoid classes
 - Prefer iteration and modularization over code duplication
 - Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError)
+- Implement proper WebSocket handling for real-time updates
+- Use custom hooks for data fetching and state management
+- Implement proper error boundaries and loading states
 - Structure repository files as follows:
 
 Backend:
@@ -60,6 +62,8 @@ Backend:
   - Response formatting
 - Follow RESTful API patterns for endpoints
 - Use JWT for authentication with proper token management
+- Implement proper WebSocket event handlers
+- Use proper connection pooling for database operations
 
 ```
 pcapserver/
@@ -100,11 +104,15 @@ pcapserver/
 ### Backend
 - Python 3.11+
 - Flask 3.1 with blueprints
+- Flask-SocketIO 5.4.1 (WebSocket support)
 - Redis 5 (for token mgmt and caching)
 - JWT for authentication
 - PostgreSQL 16 with raw SQL (no ORM)
+- asyncpg 0.30 (async database operations)
+- Scapy 2.6.1 (packet analysis)
+- simpleLogger (custom logging)
+- eventlet (async networking)
 - Protected routes and session mgmt
-- No FastAPI
 
 ### Frontend
 - React 18.2
@@ -116,7 +124,9 @@ pcapserver/
 - React Router 6.20
 - Three.js and react-globe.gl (for network visualization)
 - Axios for API calls
-- No Redux
+- WebSocket client for real-time updates
+- Custom hooks for data fetching
+- Error boundary implementation
 
 ### Architecture
 - Distributed system with remote sensors
@@ -124,6 +134,45 @@ pcapserver/
 - Network visualization
 - Real-time monitoring
 - Role-based access control
+
+## Real-time Communication
+- Use Flask-SocketIO for server-side WebSocket handling
+- Implement proper socket event handlers and error recovery
+- Use proper socket room management for targeted updates
+- Handle WebSocket reconnection gracefully
+
+## Background Processing
+- Implement proper thread lifecycle management
+- Use proper queue management for job processing
+- Handle graceful shutdown of background processes
+- Implement proper error recovery for failed tasks
+
+## Logging and Monitoring
+- Use simpleLogger for consistent log formatting
+- Implement proper log levels for different environments
+- Add proper transaction tracking
+- Log critical operations and errors
+- Implement proper cleanup of old log files
+
+## Network Analysis
+- Use Scapy for packet analysis and manipulation
+- Implement proper PCAP file handling
+- Handle large file operations efficiently
+- Implement proper network data validation
+
+## Database Operations
+- Use asyncpg for async database operations
+- Implement proper connection pooling
+- Use proper transaction management
+- Handle database errors gracefully
+- Implement proper query timeouts
+
+## Configuration Management
+- Use config.ini for all configuration
+- Implement proper environment-specific settings
+- Handle configuration reloading
+- Validate configuration values
+- Use proper default values
 
 ## Naming Conventions
 - Use lowercase with underscores for directories (e.g., components/form-wizard)
@@ -145,11 +194,10 @@ pcapserver/
 - Implement proper TypeScript discriminated unions for message types
 
 ## UI and Styling
-- Use Shadcn UI and Mantine for components
-- use `npx shadcn@latest add <component-name>` to add new shadcn components
+- Use Mantine core components
+- Use Radix UI for low-level components
 - Implement Tailwind CSS for styling
 - Consider extension-specific constraints (popup dimensions, permissions)
-- When adding new shadcn component, document the installation command
 
 ## Error Handling
 - Implement proper error boundaries
@@ -160,11 +208,16 @@ pcapserver/
 ## Testing
 - Write unit tests for utilities and components
 - Implement E2E tests for critical flows
+- Test WebSocket functionality
+- Test background processes
+- Test error handling and recovery
 
 ## Security
 - Implement Content Security Policy
 - Sanitize user inputs
 - Handle sensitive data properly
+- Implement proper token management
+- Use proper CORS configuration
 
 ## Git Usage
 Commit Message Prefixes:
