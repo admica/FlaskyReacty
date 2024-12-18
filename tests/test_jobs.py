@@ -9,8 +9,7 @@ class JobTest(BaseTest):
     """Test suite for job endpoints"""
     
     def setup(self):
-        """Setup required for job tests - login and get locations"""
-        # First login to get access token
+        """Setup required for job tests - login first"""
         result = self.request(
             "POST",
             "/api/v1/login",
@@ -21,55 +20,62 @@ class JobTest(BaseTest):
             auth=False
         )
         
-        if not result['success']:
+        if result['success']:
+            self.access_token = result['response']['access_token']
+        else:
             raise Exception("Failed to login for job tests")
-            
-        self.access_token = result['response']['access_token']
-        
-        # Get list of locations
-        location_result = self.request(
+    
+    def test_01_get_sensors(self):
+        """Get list of sensors to find an online one for job submission"""
+        result = self.request(
             "GET",
-            "/api/v1/network/locations",
+            "/api/v1/sensors",
             auth=True,
             auth_token=self.access_token
         )
         
-        if not location_result['success']:
-            raise Exception("Failed to get locations")
-            
-        locations = location_result['response'].get('locations', [])
-        if not locations:
-            raise Exception("No locations available for testing")
-        
-        # Store first location for testing
-        self.test_location = locations[0]['site']
+        if result['success']:
+            sensors = result['response']['sensors']
+            # Find first online sensor
+            self.online_sensor = next(
+                (s for s in sensors if s['status'] == 'Online'),
+                None
+            )
         
         self.add_result(TestResult(
-            "Setup - Login and get location",
-            True,
-            {"location": self.test_location}
+            "Get sensors for job submission",
+            result['success'] and self.online_sensor is not None,
+            result['response'],
+            "No online sensors found" if result['success'] and not self.online_sensor else result.get('error')
         ))
-
-    def test_01_submit_job(self):
+    
+    def test_02_submit_job(self):
         """Test submitting a basic job"""
+        if not hasattr(self, 'online_sensor'):
+            self.add_result(TestResult(
+                "Submit job",
+                False,
+                None,
+                "No online sensor available (previous test failed)"
+            ))
+            return
+            
         # Calculate times relative to now
         now = datetime.utcnow()
         start_time = now - timedelta(minutes=20)
         end_time = now - timedelta(minutes=5)
         
-        # Prepare job submission
         job_data = {
-            "location": self.test_location,
+            "location": self.online_sensor['location'],
             "params": {
                 "description": "Test job submission",
-                "src_ip": "192.168.99.10",
-                "dst_ip": "192.168.99.20",
+                "src_ip": "192.168.1.100",
+                "dst_ip": "192.168.1.200",
                 "start_time": start_time.isoformat() + "Z",
                 "end_time": end_time.isoformat() + "Z"
             }
         }
         
-        # Submit job
         result = self.request(
             "POST",
             "/api/v1/jobs/submit",
@@ -78,41 +84,47 @@ class JobTest(BaseTest):
             auth_token=self.access_token
         )
         
-        success = result['success']
-        error = None
-        
-        if success:
-            data = result['response']
-            # Validate response structure
-            if not isinstance(data, dict):
-                success = False
-                error = "Response is not a dictionary"
-            elif not all(key in data for key in ['message', 'location', 'params']):
-                success = False
-                error = "Missing required fields in response"
-            elif data['location'] != self.test_location:
-                success = False
-                error = f"Wrong location in response: {data['location']}"
+        if result['success']:
+            self.job_id = result['response'].get('job_id')
         
         self.add_result(TestResult(
             "Submit basic job",
-            success,
+            result['success'] and self.job_id is not None,
             result['response'],
-            error or result.get('error')
+            "No job_id in response" if result['success'] and not self.job_id else result.get('error')
         ))
-
+    
+    def test_03_get_job_status(self):
+        """Test getting status of submitted job"""
+        if not hasattr(self, 'job_id'):
+            self.add_result(TestResult(
+                "Get job status",
+                False,
+                None,
+                "No job_id available (previous test failed)"
+            ))
+            return
+            
+        result = self.request(
+            "GET",
+            f"/api/v1/jobs/{self.job_id}/status",
+            auth=True,
+            auth_token=self.access_token
+        )
+        
+        self.add_result(TestResult(
+            "Get job status",
+            result['success'],
+            result['response'],
+            result.get('error')
+        ))
+    
     def teardown(self):
         """Cleanup after job tests"""
         if hasattr(self, 'access_token'):
-            result = self.request(
+            self.request(
                 "POST",
                 "/api/v1/logout",
                 auth=True,
                 auth_token=self.access_token
             )
-            self.add_result(TestResult(
-                "Teardown - Logout",
-                result['success'],
-                result['response'],
-                result.get('error')
-            )) 
