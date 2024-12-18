@@ -8,6 +8,7 @@ from datetime import datetime
 import time
 import json
 import os
+from queue import Empty
 
 from core import logger, db, config
 from simpleLogger import SimpleLogger
@@ -143,10 +144,100 @@ def update_job_failed(job_id: int, message: str):
     except Exception as e:
         logger.error(f"Error updating job {job_id} status: {e}")
 
-def cleanup_tasks(task_threads: Dict[str, Process]) -> None:
+def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict[str, threading.Thread]) -> None:
+    """Monitor task threads until completion and update job status"""
+    try:
+        completed_tasks = set()
+        task_results = {}
+        
+        while len(completed_tasks) < len(task_threads):
+            for sensor_name, queue in task_queues.items():
+                if sensor_name in completed_tasks:
+                    continue
+                    
+                try:
+                    # Get status update if available
+                    status = queue.get_nowait()
+                    task_results[sensor_name] = status
+                    
+                    # If task is in final state
+                    if status['status'] in [TASK_STATUS['COMPLETE'], TASK_STATUS['FAILED'], TASK_STATUS['SKIPPED']]:
+                        completed_tasks.add(sensor_name)
+                        
+                        # Thread cleanup can happen here since we have its final status
+                        if task_threads[sensor_name].is_alive():
+                            task_threads[sensor_name].join(timeout=5)
+                        
+                except Empty:
+                    continue
+                
+            # Update job status based on current state
+            update_job_status(job_id, determine_job_status(task_results))
+            time.sleep(0.1)
+        
+        # All tasks have reported completion
+        # Final cleanup of any remaining threads
+        cleanup_tasks(task_threads)
+        
+    except Exception as e:
+        logger.error(f"Error monitoring tasks: {e}")
+        update_job_failed(job_id, f"Error monitoring tasks: {e}")
+
+def determine_job_status(task_results: Dict[str, dict]) -> tuple[str, str]:
+    """Determine job status based on task results
+    
+    Returns:
+        Tuple of (status, message)
+    """
+    if not task_results:
+        return 'Failed', 'No task results available'
+        
+    complete_count = 0
+    failed_count = 0
+    messages = []
+    
+    for sensor_name, result in task_results.items():
+        status = result['status']
+        if status == TASK_STATUS['COMPLETE']:
+            complete_count += 1
+            has_data = result.get('result', {}).get('has_data', False)
+            messages.append(f"{sensor_name}: Complete{'with data' if has_data else 'no data'}")
+        elif status in [TASK_STATUS['FAILED'], TASK_STATUS['SKIPPED']]:
+            failed_count += 1
+            messages.append(f"{sensor_name}: {status}")
+            
+    total_tasks = len(task_results)
+    
+    if complete_count == total_tasks:
+        return 'Complete', 'All tasks completed successfully'
+    elif complete_count > 0:
+        return 'Partially Complete', f"{complete_count}/{total_tasks} tasks completed"
+    else:
+        return 'Failed', 'No tasks completed successfully'
+
+def update_job_status(job_id: int, status_info: tuple[str, str]) -> None:
+    """Update job status and message"""
+    try:
+        status, message = status_info
+        db("""
+            UPDATE jobs 
+            SET status = %s,
+                result_message = %s,
+                updated_at = NOW(),
+                completed_at = CASE 
+                    WHEN %s IN ('Complete', 'Failed', 'Partially Complete') THEN NOW()
+                    ELSE NULL
+                END
+            WHERE id = %s
+        """, (status, message, status, job_id))
+    except Exception as e:
+        logger.error(f"Error updating job {job_id} status: {e}")
+
+def cleanup_tasks(task_threads: Dict[str, threading.Thread]) -> None:
     """Cleanup task threads"""
     for thread in task_threads.values():
         try:
-            thread.join(timeout=5)
+            if thread.is_alive():
+                thread.join(timeout=5)
         except Exception as e:
             logger.error(f"Error cleaning up task thread: {e}")

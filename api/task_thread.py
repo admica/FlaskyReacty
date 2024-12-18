@@ -75,8 +75,14 @@ def task_thread(
             })
             return
 
-        # Update status to running
-        update_task_status(task_id, TASK_STATUS['RUNNING'])
+        # Update status to running and set started_at
+        db("""
+            UPDATE tasks 
+            SET status = %s,
+                started_at = NOW()
+            WHERE id = %s
+        """, (TASK_STATUS['RUNNING'], task_id))
+        
         status_queue.put({'status': TASK_STATUS['RUNNING']})
 
         # Run PCAP collection
@@ -87,7 +93,15 @@ def task_thread(
         )
 
         if not success:
-            update_task_status(task_id, TASK_STATUS['FAILED'], result)
+            # Set completed_at before sending final status
+            db("""
+                UPDATE tasks 
+                SET status = %s,
+                    completed_at = NOW(),
+                    result_message = %s
+                WHERE id = %s
+            """, (TASK_STATUS['FAILED'], json.dumps(result), task_id))
+            
             status_queue.put({
                 'status': TASK_STATUS['FAILED'],
                 'result': result
@@ -108,7 +122,15 @@ def task_thread(
                 result.get('remote_path')
             )
             if not success:
-                update_task_status(task_id, TASK_STATUS['FAILED'], download_result)
+                # Set completed_at before sending final status
+                db("""
+                    UPDATE tasks 
+                    SET status = %s,
+                        completed_at = NOW(),
+                        result_message = %s
+                    WHERE id = %s
+                """, (TASK_STATUS['FAILED'], json.dumps(download_result), task_id))
+                
                 status_queue.put({
                     'status': TASK_STATUS['FAILED'],
                     'result': download_result
@@ -117,11 +139,22 @@ def task_thread(
 
             result.update(download_result)
 
-        # Update final status
-        update_task_status(task_id, TASK_STATUS['COMPLETE'], {
-            'file_size': result.get('file_size', '0'),
-            'message': 'Task completed successfully'
-        })
+        # Set completed_at before sending final success status
+        db("""
+            UPDATE tasks 
+            SET status = %s,
+                completed_at = NOW(),
+                pcap_size = %s,
+                result_message = %s
+            WHERE id = %s
+        """, (
+            TASK_STATUS['COMPLETE'],
+            result.get('file_size', '0'),
+            'Task completed successfully',
+            task_id
+        ))
+
+        # Send final status
         status_queue.put({
             'status': TASK_STATUS['COMPLETE'],
             'result': result,
@@ -130,6 +163,19 @@ def task_thread(
 
     except Exception as e:
         logger.error(f"Error in task thread: {e}")
+        
+        # Set completed_at before sending final error status
+        try:
+            db("""
+                UPDATE tasks 
+                SET status = %s,
+                    completed_at = NOW(),
+                    result_message = %s
+                WHERE id = %s
+            """, (TASK_STATUS['FAILED'], str(e), task_id))
+        except Exception as db_error:
+            logger.error(f"Error updating task status: {db_error}")
+            
         status_queue.put({
             'status': TASK_STATUS['FAILED'],
             'result': {'message': str(e)}

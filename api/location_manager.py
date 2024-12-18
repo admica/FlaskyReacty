@@ -71,10 +71,13 @@ class LocationManager:
                 if proc.is_alive():
                     logger.debug("-- proc is alive")
                     self._job_queues[location].put('KILL')
+                    logger.debug("-- proc put KILL in queue")
                     proc.join(timeout=5)
+                    logger.debug("-- proc after join")
                 else:
                     logger.debug("-- prod NOT alive")
                 del self._job_procs[location]
+                logger.debug("-- proc after deleting _job_procs[location]")
             if location in self._job_queues:
                 logger.debug("-- location is in _job_queues")
                 del self._job_queues[location]
@@ -82,6 +85,9 @@ class LocationManager:
                 logger.debug("-- location NOT in _job_queues")
         except Exception as e:
             logger.error(f"Error cleaning up location {location}: {e}")
+
+        logger.debug("END _cleanup_location")
+
 
     def cleanup(self):
         """Cleanup all job processors"""

@@ -161,7 +161,7 @@ app.register_blueprint(subnet_mapping_bp)
 app.register_blueprint(preferences_bp)
 
 # Register cleanup handlers
-atexit.register(cleanup_handler)
+#atexit.register(cleanup_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
