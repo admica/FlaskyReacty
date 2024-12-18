@@ -159,18 +159,9 @@ def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict
     """Monitor task threads until completion and update job status"""
     try:
         completed_tasks = set()
-        task_records = {}  # Keep track of task IDs
         last_update_time = {name: time.time() for name in task_threads.keys()}
         QUEUE_TIMEOUT = 1.0  # 1 second timeout per queue check
         TASK_TIMEOUT = 1800  # 30 minutes before considering a task dead
-        
-        # Create initial task records
-        for sensor_name in task_threads.keys():
-            task_id = create_task_record(job_id, sensor_name)
-            if not task_id:
-                logger.error(f"Failed to create task record for {sensor_name}")
-                continue
-            task_records[sensor_name] = task_id
         
         while len(completed_tasks) < len(task_threads):
             current_time = time.time()
@@ -181,9 +172,15 @@ def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict
                     continue
                     
                 thread = task_threads[sensor_name]
-                task_id = task_records.get(sensor_name)
-                if not task_id:
+                
+                # Get task record ID
+                task_row = db("SELECT id FROM tasks WHERE job_id = %s AND sensor = %s", 
+                            (job_id, sensor_name))
+                if not task_row:
+                    logger.error(f"No task record found for {sensor_name}")
                     continue
+                    
+                task_id = task_row[0]
                 
                 # Check if thread died
                 if not thread.is_alive():
@@ -277,12 +274,14 @@ def update_task_status(task_id: int, status: str, result: dict = None) -> None:
             """, (status, task_id))
             
         elif status == TASK_STATUS['RETRIEVING']:
+            # Use temp_path from result if provided
+            temp_path = result.get('temp_path') if result else None
             db("""
                 UPDATE tasks 
                 SET status = %s,
                     temp_path = %s
                 WHERE id = %s
-            """, (status, result.get('temp_path'), task_id))
+            """, (status, temp_path, task_id))
             
         elif status in [TASK_STATUS['COMPLETE'], TASK_STATUS['FAILED'], TASK_STATUS['SKIPPED']]:
             db("""
@@ -305,7 +304,7 @@ def update_task_status(task_id: int, status: str, result: dict = None) -> None:
                     result_message = %s
                 WHERE id = %s
             """, (status, json.dumps(result) if result else None, task_id))
-            
+
     except Exception as e:
         logger.error(f"Error updating task status: {e}")
 
@@ -323,6 +322,18 @@ def update_job_status_from_tasks(job_id: int) -> None:
         status_counts = {row[0]: row[1] for row in rows}
         total_tasks = sum(status_counts.values())
         
+        # Get current job status
+        job_row = db("SELECT status FROM jobs WHERE id = %s", (job_id,))
+        if not job_row:
+            logger.error(f"No job record found for ID {job_id}")
+            return
+            
+        current_status = job_row[0]
+        
+        # Don't update if job is in Merging state
+        if current_status == 'Merging':
+            return
+            
         # Determine job status
         if status_counts.get(TASK_STATUS['RUNNING'], 0) > 0 or status_counts.get(TASK_STATUS['RETRIEVING'], 0) > 0:
             status = 'Running'
