@@ -138,7 +138,7 @@ def task_thread(
 def create_task_record(job_id: int, sensor_name: str) -> Optional[int]:
     """Create task record in database"""
     try:
-        task_id = db("""
+        result = db("""
             INSERT INTO tasks (
                 job_id,
                 sensor,
@@ -152,8 +152,8 @@ def create_task_record(job_id: int, sensor_name: str) -> Optional[int]:
             ) VALUES (
                 %s, %s, %s::task_status, NULL, NULL, NULL, NULL, NULL, NOW()
             ) RETURNING id
-        """, (job_id, sensor_name, TASK_STATUS['SUBMITTED']))[0]['id']
-        return task_id
+        """, (job_id, sensor_name, TASK_STATUS['SUBMITTED']))
+        return result[0] if result else None
     except Exception as e:
         logger.error(f"Error creating task record: {e}")
         return None
