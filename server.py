@@ -52,6 +52,10 @@ def cleanup_handler(signo=None, frame=None):
     """Handle cleanup for both normal exit and signals"""
     try:
         logger.info(f"Starting cleanup... (Signal: {signo if signo else 'None'})")
+        
+        # Set shutdown flag
+        if hasattr(server_status, 'shutdown_requested'):
+            server_status['shutdown_requested'] = True
 
         # Update server status
         server_status['state'] = 'stopping'
@@ -60,14 +64,16 @@ def cleanup_handler(signo=None, frame=None):
         from api.location_manager import location_manager
         location_manager.cleanup()
 
-        # Stop network maintenance thread
+        # Stop network maintenance thread with longer timeout
         if maintenance_thread and maintenance_thread.is_alive():
             try:
                 logger.info("Stopping network maintenance thread...")
                 maintenance_thread.stop()
-                maintenance_thread.join(timeout=10)
+                maintenance_thread.join(timeout=10)  # Increased timeout
                 if maintenance_thread.is_alive():
-                    logger.warning("Network maintenance thread did not stop gracefully")
+                    logger.warning("Force terminating maintenance thread")
+                    # Force thread termination if needed
+                    maintenance_thread._stop()
             except Exception as e:
                 logger.error(f"Error stopping network maintenance thread: {e}")
 
@@ -87,9 +93,20 @@ def cleanup_handler(signo=None, frame=None):
 
         logger.info("Cleanup complete")
 
+        # Force exit if called from signal handler
+        if signo:
+            sys.exit(0)
+
     except Exception as e:
         logger.error(f"Error during cleanup: {e}")
         logger.error(traceback.format_exc())
+        sys.exit(1)
+
+def signal_handler(signo, frame):
+    """Dedicated signal handler to shutdown Flask"""
+    logger.info(f"Received signal {signo}")
+    # Trigger cleanup
+    cleanup_handler(signo, frame)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -144,8 +161,8 @@ app.register_blueprint(preferences_bp)
 
 # Register cleanup handlers
 atexit.register(cleanup_handler)
-signal.signal(signal.SIGTERM, cleanup_handler)
-signal.signal(signal.SIGINT, cleanup_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 # File Download Handler
 @app.route('/api/v1/files/download', methods=['GET'])
@@ -291,15 +308,18 @@ if __name__ == '__main__':
         else:
             logger.warning("No SSL configuration found, running without SSL")
 
-        # Start the Flask app
+        # Start the Flask app with proper shutdown handling
+        server_status['shutdown_requested'] = False
         app.run(
             host=config.get('SERVER', 'host'),
             port=config.getint('SERVER', 'port'),
             debug=config.getboolean('SERVER', 'debug'),
-            ssl_context=ssl_context
+            ssl_context=ssl_context,
+            use_reloader=False  # Disable reloader to prevent duplicate signals
         )
     except Exception as e:
         logger.error(f"Server startup error: {e}")
         logger.error(traceback.format_exc())
+        sys.exit(1)
     finally:
         cleanup_handler()
