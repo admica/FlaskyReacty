@@ -107,16 +107,17 @@ def create_job_record(job: dict) -> Optional[int]:
         result = db("""
             INSERT INTO jobs (
                 location, submitted_by, src_ip, dst_ip,
-                start_time, end_time, description,
-                status, submit_time
+                event_time, start_time, end_time, description,
+                status
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, 'Submitted', NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, 'Submitted'
             ) RETURNING id
         """, (
             job['location'],
             job['submitted_by'],
             job['src_ip'],
             job['dst_ip'],
+            job.get('event_time'),  # May be None
             job['start_time'],
             job['end_time'],
             job['description']
