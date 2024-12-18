@@ -1,8 +1,9 @@
 """
-Job process management for location-based PCAP job
+Job process management for location-based PCAP jobs
 """
 from multiprocessing import Process, Queue
-from typing import Dict
+from typing import Dict, Optional
+import threading
 from datetime import datetime
 import time
 import json
@@ -11,20 +12,10 @@ import os
 from core import logger, db, config
 from simpleLogger import SimpleLogger
 
-# Global process tracking
-job_procs: Dict[str, Process] = {}  # location -> Process
-job_queues: Dict[str, Queue] = {}   # location -> Queue
-
-# Job status values matching SQL enum
-JOB_STATUS = {
-    'SUBMITTED': 'Submitted',
-    'RUNNING': 'Running',
-    'MERGING': 'Merging',
-    'COMPLETE': 'Complete',
-    'PARTIAL': 'Partial Complete',
-    'FAILED': 'Failed',
-    'ABORTED': 'Aborted'
-}
+# Global dictionaries for job queues and processes
+# These are now primarily managed through LocationManager
+job_queues: Dict[str, Queue] = {}
+job_procs: Dict[str, Process] = {}
 
 def start_job_proc(location: str) -> Process:
     """Start a new job process for a location"""
@@ -47,7 +38,7 @@ def job_proc(location: str, queue: Queue) -> None:
     while True:
         try:
             # Wait for job from queue
-            job = queue.get()
+            job = queue.get() # Block until a job arrives
             if job == 'KILL':
                 logger.info(f"Shutting down job processor for {location}")
                 return
@@ -83,173 +74,70 @@ def job_proc(location: str, queue: Queue) -> None:
                 )
                 task_threads[sensor['name']] = thread
 
-            # Monitor tasks
+            # Monitor tasks until completion
             monitor_tasks(job_id, task_queues, task_threads)
+
+            # After tasks complete, clean up threads
+            cleanup_tasks(task_threads)
+
+            # Continue listening for next job
+            continue
 
         except Exception as e:
             logger.error(f"Error in job processor: {e}")
             continue
 
-def create_job_record(job: dict) -> int:
-    """Create job record in database"""
+def get_location_sensors(location: str) -> list:
+    """Get list of active sensors for a location"""
     try:
-        job_id = db("""
+        return db("""
+            SELECT name, fqdn 
+            FROM sensors 
+            WHERE location = %s 
+            AND status != 'Offline'
+            ORDER BY name
+        """, (location,))
+    except Exception as e:
+        logger.error(f"Error getting sensors for location {location}: {e}")
+        return []
+
+def create_job_record(job: dict) -> Optional[int]:
+    """Create a new job record in the database"""
+    try:
+        result = db("""
             INSERT INTO jobs (
-                location,
-                description,
-                src_ip,
-                dst_ip,
-                event_time,
-                start_time,
-                end_time,
-                status,
-                submitted_by,
-                created_at
+                location, submitted_by, src_ip, dst_ip,
+                start_time, end_time, description,
+                status, submit_time
             ) VALUES (
-                %s, %s, %s::inet, %s::inet, %s, %s, %s, 'Submitted', %s, NOW()
+                %s, %s, %s, %s, %s, %s, %s, 'Submitted', NOW()
             ) RETURNING id
         """, (
             job['location'],
-            job['description'],
-            job['src_ip'] if job['src_ip'] else None,
-            job['dst_ip'] if job['dst_ip'] else None,
-            job['event_time'],
+            job['submitted_by'],
+            job['src_ip'],
+            job['dst_ip'],
             job['start_time'],
             job['end_time'],
-            job['submitted_by']
-        ))[0]['id']
-        return job_id
+            job['description']
+        ))
+        return result[0][0] if result else None
     except Exception as e:
         logger.error(f"Error creating job record: {e}")
         return None
 
-def get_location_sensors(location: str) -> list:
-    """Get list of active sensors for location"""
-    try:
-        sensors = db("""
-            SELECT name, fqdn
-            FROM sensors
-            WHERE location = %s
-            AND status != 'Offline'
-        """, (location,))
-        return sensors
-    except Exception as e:
-        logger.error(f"Error getting sensors: {e}")
-        return []
-
-def update_job_failed(job_id: int, reason: str) -> None:
-    """Update job as failed with reason"""
+def update_job_failed(job_id: int, message: str):
+    """Update job status to failed with message"""
     try:
         db("""
-            UPDATE jobs
-            SET status = %s,
+            UPDATE jobs 
+            SET status = 'Failed',
                 result_message = %s,
                 end_time = NOW()
             WHERE id = %s
-        """, (JOB_STATUS['FAILED'], reason, job_id))
+        """, (message, job_id))
     except Exception as e:
-        logger.error(f"Error updating job failure: {e}")
-
-def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict[str, Process]) -> None:
-    """Monitor task threads and handle completion"""
-    logger = SimpleLogger(f"job_monitor_{job_id}")
-    start_time = time.time()
-
-    while (time.time() - start_time) < config.getint('REQUESTS', 'max_secs', fallback=900):
-        all_complete = True
-        has_data = False
-
-        # Check each task queue for updates
-        for sensor_name, queue in task_queues.items():
-            try:
-                update = queue.get(timeout=1)
-                if update:
-                    handle_task_update(job_id, sensor_name, update)
-
-                    if update.get('status') not in ['Complete', 'Failed', 'Skipped']:
-                        all_complete = False
-                    if update.get('has_data'):
-                        has_data = True
-            except Exception:
-                all_complete = False
-                continue
-
-        if all_complete:
-            handle_job_completion(job_id, has_data)
-            break
-
-    # Cleanup
-    cleanup_tasks(task_threads)
-
-def handle_task_update(job_id: int, sensor_name: str, update: dict) -> None:
-    """Handle status update from task thread"""
-    try:
-        db("""
-            UPDATE tasks
-            SET status = %s,
-                result_message = %s
-            WHERE job_id = %s
-            AND sensor = %s
-        """, (
-            update['status'],
-            json.dumps(update.get('result', {})),
-            job_id,
-            sensor_name
-        ))
-    except Exception as e:
-        logger.error(f"Error updating task status: {e}")
-
-def handle_job_completion(job_id: int, has_data: bool) -> None:
-    """Handle job completion and PCAP merging if needed"""
-    try:
-        if not has_data:
-            db("""
-                UPDATE jobs
-                SET status = %s,
-                    result_message = 'No PCAP data found',
-                    end_time = NOW()
-                WHERE id = %s
-            """, (JOB_STATUS['COMPLETE'], job_id))
-            return
-
-        # Update to merging state
-        db("""
-            UPDATE jobs
-            SET status = %s
-            WHERE id = %s
-        """, (JOB_STATUS['MERGING'], job_id))
-
-        # TODO: Implement PCAP merging BEGIN
-        logger.info("Mergecap merging placeholder start")
-        from time import sleep
-        sleep(3)
-        logger.info("Mergecap merging placeholder finish")
-
-        # After successful merge:
-        output_path = f"/tmp/job_{job_id}.pcap"
-        file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
-
-        db("""
-            UPDATE jobs
-            SET status = %s,
-                result_path = %s,
-                result_size = %s,
-                end_time = NOW()
-            WHERE id = %s
-        """, (JOB_STATUS['COMPLETE'], output_path, str(file_size), job_id))
-
-        logger.info("Mergecap merging placeholder finish")
-        # END Implement PCAP merging END
-
-    except Exception as e:
-        logger.error(f"Error handling job completion: {e}")
-        db("""
-            UPDATE jobs
-            SET status = %s,
-                result_message = %s,
-                end_time = NOW()
-            WHERE id = %s
-        """, (JOB_STATUS['FAILED'], str(e), job_id))
+        logger.error(f"Error updating job {job_id} status: {e}")
 
 def cleanup_tasks(task_threads: Dict[str, Process]) -> None:
     """Cleanup task threads"""

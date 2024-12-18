@@ -56,6 +56,10 @@ def cleanup_handler(signo=None, frame=None):
         # Update server status
         server_status['state'] = 'stopping'
 
+        # Clean up location processors
+        from api.location_manager import location_manager
+        location_manager.cleanup()
+
         # Stop network maintenance thread
         if maintenance_thread and maintenance_thread.is_alive():
             try:
@@ -69,45 +73,39 @@ def cleanup_handler(signo=None, frame=None):
 
         # Stop all sensor threads
         active_threads = list(sensor_queues.keys())
-        logger.info(f"Stopping {len(active_threads)} sensor threads...")
-
-        for sensor_name in active_threads:
+        for sensor in active_threads:
             try:
-                logger.info(f"Stopping thread for sensor: {sensor_name}")
-                sensor_queues[sensor_name].put(None)
-                if sensor_name in sensor_threads:
-                    sensor_threads[sensor_name].join(timeout=10)
-                    if sensor_threads[sensor_name].is_alive():
-                        logger.warning(f"Thread for sensor {sensor_name} did not stop gracefully")
+                logger.info(f"Stopping sensor thread for {sensor}")
+                sensor_queues[sensor].put('STOP')
+                sensor_threads[sensor].join(timeout=5)
+                if sensor_threads[sensor].is_alive():
+                    logger.warning(f"Sensor thread for {sensor} did not stop gracefully")
             except Exception as e:
-                logger.error(f"Error stopping thread for sensor {sensor_name}: {e}")
+                logger.error(f"Error stopping sensor thread for {sensor}: {e}")
 
         # Close database connections
         try:
+            logger.info("Closing database connections...")
             db_pool.closeall()
-            logger.info("Database connections closed")
         except Exception as e:
             logger.error(f"Error closing database connections: {e}")
 
         # Close Redis connection
         try:
+            logger.info("Closing Redis connection...")
             redis_client.close()
-            logger.info("Redis connection closed")
         except Exception as e:
             logger.error(f"Error closing Redis connection: {e}")
 
-        server_status['state'] = 'stopped'
         logger.info("Cleanup complete")
-
-        # If called by signal handler, exit
-        if signo:
-            sys.exit(0)
 
     except Exception as e:
         logger.error(f"Error during cleanup: {e}")
         logger.error(traceback.format_exc())
-        if signo:
-            sys.exit(1)
+
+    finally:
+        # Force exit if cleanup takes too long
+        os._exit(0)
 
 # Initialize Flask app
 app = Flask(__name__)

@@ -9,7 +9,7 @@ from typing import List, Dict, Optional
 
 from core import logger, db, config
 from api.auth import activity_tracking
-from api.job_process import job_procs, start_job_proc
+from api.location_manager import location_manager
 
 jobs_bp = Blueprint('jobs', __name__)
 
@@ -102,14 +102,15 @@ def submit_job():
         if errors: return jsonify({"errors": errors}), 400
 
         location = job['location']
+        
+        # Get or create job queue for location
+        queue, error = location_manager.get_location_queue(location)
 
-        # Ensure job processor exists and is running
-        if location not in job_procs or not job_procs[location].is_alive():
-            logger.info(f"Starting new job processor for {location}")
-            job_procs[location] = start_job_proc(location)
+        if not queue:
+            return jsonify({"error": error}), 400
 
         # Queue the job
-        job_queues[location].put(job)
+        queue.put(job)
 
         return jsonify({
             "message": "Job submitted successfully",
