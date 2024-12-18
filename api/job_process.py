@@ -357,12 +357,16 @@ def update_job_status_from_tasks(job_id: int) -> None:
             SET status = %s,
                 result_message = %s,
                 updated_at = NOW(),
+                started_at = CASE 
+                    WHEN status = 'Submitted' AND %s = 'Running' THEN NOW()
+                    ELSE started_at
+                END,
                 completed_at = CASE 
                     WHEN %s IN ('Complete', 'Failed', 'Partially Complete') THEN NOW()
                     ELSE NULL
                 END
             WHERE id = %s
-        """, (status, message, status, job_id))
+        """, (status, message, status, status, job_id))
             
     except Exception as e:
         logger.error(f"Error updating job {job_id} status: {e}")
