@@ -71,18 +71,6 @@ def cleanup_handler(signo=None, frame=None):
             except Exception as e:
                 logger.error(f"Error stopping network maintenance thread: {e}")
 
-        # Stop all sensor threads
-        active_threads = list(sensor_queues.keys())
-        for sensor in active_threads:
-            try:
-                logger.info(f"Stopping sensor thread for {sensor}")
-                sensor_queues[sensor].put('STOP')
-                sensor_threads[sensor].join(timeout=5)
-                if sensor_threads[sensor].is_alive():
-                    logger.warning(f"Sensor thread for {sensor} did not stop gracefully")
-            except Exception as e:
-                logger.error(f"Error stopping sensor thread for {sensor}: {e}")
-
         # Close database connections
         try:
             logger.info("Closing database connections...")
@@ -102,10 +90,6 @@ def cleanup_handler(signo=None, frame=None):
     except Exception as e:
         logger.error(f"Error during cleanup: {e}")
         logger.error(traceback.format_exc())
-
-    finally:
-        # Force exit if cleanup takes too long
-        os._exit(0)
 
 # Initialize Flask app
 app = Flask(__name__)
