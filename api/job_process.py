@@ -335,9 +335,16 @@ def update_job_status_from_tasks(job_id: int) -> None:
             return
             
         # Determine job status
-        if status_counts.get(TASK_STATUS['RUNNING'], 0) > 0 or status_counts.get(TASK_STATUS['RETRIEVING'], 0) > 0:
+        running_count = status_counts.get(TASK_STATUS['RUNNING'], 0)
+        retrieving_count = status_counts.get(TASK_STATUS['RETRIEVING'], 0)
+        if running_count > 0 or retrieving_count > 0:
             status = 'Running'
-            message = f"{status_counts.get(TASK_STATUS['RUNNING'], 0)} tasks running"
+            active_tasks = []
+            if running_count > 0:
+                active_tasks.append(f"{running_count} running")
+            if retrieving_count > 0:
+                active_tasks.append(f"{retrieving_count} retrieving")
+            message = f"{', '.join(active_tasks)}"
         elif status_counts.get(TASK_STATUS['COMPLETE'], 0) == total_tasks:
             status = 'Complete'
             message = 'All tasks completed successfully'
