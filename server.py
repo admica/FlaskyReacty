@@ -63,13 +63,14 @@ def cleanup_handler(signo=None, frame=None):
         # Clean up location processors
         from api.location_manager import location_manager
         location_manager.cleanup()
+        logger.debug("After location_manager.cleanup")
 
         # Stop network maintenance thread with longer timeout
         if maintenance_thread and maintenance_thread.is_alive():
             try:
                 logger.info("Stopping network maintenance thread...")
                 maintenance_thread.stop()
-                maintenance_thread.join(timeout=10)  # Increased timeout
+                maintenance_thread.join(timeout=5)  # Increased timeout
                 if maintenance_thread.is_alive():
                     logger.warning("Force terminating maintenance thread")
                     # Force thread termination if needed
@@ -264,7 +265,7 @@ def before_request():
             logger.warning(f"High request count: {current_count}")
             if current_count > 50:
                 time.sleep(0.1)
-                if current_count > 250:
+                if current_count > 200:
                     time.sleep(0.25)
                     if current_count > 1000:
                         logger.error("Circuit breaker triggered")

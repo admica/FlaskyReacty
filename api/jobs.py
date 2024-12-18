@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Optional
 
-from core import logger, db, config
+from core import logger, db, config, rate_limit
 from api.auth import activity_tracking
 from api.location_manager import location_manager
 
@@ -120,4 +120,92 @@ def submit_job():
 
     except Exception as e:
         logger.error(f"Error submitting job: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@jobs_bp.route('/api/v1/jobs/<int:job_id>/status', methods=['GET'])
+@jwt_required()
+@rate_limit()
+def get_job_status(job_id):
+    """Get status of a specific job"""
+    try:
+        # Get job details
+        job = db("""
+            SELECT j.id, j.location, j.submitted_by, j.src_ip, j.dst_ip,
+                   j.event_time, j.start_time, j.end_time, j.description,
+                   j.status, j.result_message,
+                   array_agg(t.status) as task_statuses
+            FROM jobs j
+            LEFT JOIN tasks t ON t.job_id = j.id
+            WHERE j.id = %s
+            GROUP BY j.id
+        """, (job_id,))
+
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+
+        job = job[0]
+
+        # Format response
+        response = {
+            'id': job[0],
+            'location': job[1],
+            'submitted_by': job[2],
+            'src_ip': job[3],
+            'dst_ip': job[4],
+            'event_time': job[5].isoformat() if job[5] else None,
+            'start_time': job[6].isoformat() if job[6] else None,
+            'end_time': job[7].isoformat() if job[7] else None,
+            'description': job[8],
+            'status': job[9],
+            'result_message': job[10],
+            'task_statuses': job[11] if job[11] and job[11][0] is not None else []
+        }
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        logger.error(f"Error getting job status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@jobs_bp.route('/api/v1/jobs/<string:location>', methods=['GET'])
+@jwt_required()
+@rate_limit()
+def get_jobs_by_location(location):
+    """Get all jobs for a specific location"""
+    try:
+        # Get jobs for location
+        jobs = db("""
+            SELECT j.id, j.location, j.submitted_by, j.src_ip, j.dst_ip,
+                   j.event_time, j.start_time, j.end_time, j.description,
+                   j.status, j.result_message,
+                   array_agg(t.status) as task_statuses
+            FROM jobs j
+            LEFT JOIN tasks t ON t.job_id = j.id
+            WHERE j.location = %s
+            GROUP BY j.id
+            ORDER BY j.id DESC
+        """, (location,))
+
+        # Format response
+        response = []
+        for job in jobs:
+            response.append({
+                'id': job[0],
+                'location': job[1],
+                'submitted_by': job[2],
+                'src_ip': job[3],
+                'dst_ip': job[4],
+                'event_time': job[5].isoformat() if job[5] else None,
+                'start_time': job[6].isoformat() if job[6] else None,
+                'end_time': job[7].isoformat() if job[7] else None,
+                'description': job[8],
+                'status': job[9],
+                'result_message': job[10],
+                'task_statuses': job[11] if job[11] and job[11][0] is not None else []
+            })
+
+        return jsonify({'jobs': response}), 200
+
+    except Exception as e:
+        logger.error(f"Error getting jobs for location {location}: {e}")
         return jsonify({"error": str(e)}), 500

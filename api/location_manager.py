@@ -64,14 +64,22 @@ class LocationManager:
     def _cleanup_location(self, location: str):
         """Clean up resources for a specific location"""
         try:
+            logger.debug("START _cleanup_location")
             if location in self._job_procs:
+                logger.debug("-- location is in _job_procs")
                 proc = self._job_procs[location]
                 if proc.is_alive():
+                    logger.debug("-- proc is alive")
                     self._job_queues[location].put('KILL')
-                    proc.join(timeout=10)
+                    proc.join(timeout=5)
+                else:
+                    logger.debug("-- prod NOT alive")
                 del self._job_procs[location]
             if location in self._job_queues:
+                logger.debug("-- location is in _job_queues")
                 del self._job_queues[location]
+            else:
+                logger.debug("-- location NOT in _job_queues")
         except Exception as e:
             logger.error(f"Error cleaning up location {location}: {e}")
 
@@ -79,6 +87,7 @@ class LocationManager:
         """Cleanup all job processors"""
         with self._lock:
             locations = list(self._job_procs.keys())
+            logger.debug(f"Cleanup locations: {locations}")
             for location in locations:
                 self._cleanup_location(location)
 

@@ -11,6 +11,7 @@ import os
 
 from core import logger, db, config
 from simpleLogger import SimpleLogger
+from api.task_thread import start_task_thread, TASK_STATUS
 
 # Global dictionaries for job queues and processes
 # These are now primarily managed through LocationManager
@@ -90,13 +91,15 @@ def job_proc(location: str, queue: Queue) -> None:
 def get_location_sensors(location: str) -> list:
     """Get list of active sensors for a location"""
     try:
-        return db("""
+        rows = db("""
             SELECT name, fqdn 
             FROM sensors 
             WHERE location = %s 
             AND status != 'Offline'
             ORDER BY name
         """, (location,))
+        
+        return [{'name': row[0], 'fqdn': row[1]} for row in rows]
     except Exception as e:
         logger.error(f"Error getting sensors for location {location}: {e}")
         return []
@@ -122,7 +125,7 @@ def create_job_record(job: dict) -> Optional[int]:
             job['end_time'],
             job['description']
         ))
-        return result[0][0] if result else None
+        return result[0] if result else None
     except Exception as e:
         logger.error(f"Error creating job record: {e}")
         return None
