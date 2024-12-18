@@ -59,50 +59,30 @@ def task_thread(
         sensor_name: Name of the sensor
         sensor_fqdn: FQDN of the sensor
         job_id: ID of the parent job
-        job_params: Job parameters
+        job_params: Job parameters including output_path
         status_queue: Queue to report status updates
     """
     logger = SimpleLogger(f"task_thread_{sensor_name}")
     logger.info(f"Starting task for sensor {sensor_name}")
 
     try:
-        # Create task record
-        task_id = create_task_record(job_id, sensor_name)
-        if not task_id:
-            status_queue.put({
-                'status': TASK_STATUS['FAILED'],
-                'result': {'message': 'Failed to create task record'}
-            })
-            return
-
-        # Update status to running and set started_at
-        db("""
-            UPDATE tasks 
-            SET status = %s,
-                started_at = NOW()
-            WHERE id = %s
-        """, (TASK_STATUS['RUNNING'], task_id))
-        
-        status_queue.put({'status': TASK_STATUS['RUNNING']})
+        # Report initial running status
+        status_queue.put({
+            'sensor': sensor_name,
+            'status': TASK_STATUS['RUNNING'],
+            'result': None
+        })
 
         # Run PCAP collection
         success, result = run_pcap_collection(
             sensor_fqdn,
             job_params,
-            task_id
+            job_id
         )
 
         if not success:
-            # Set completed_at before sending final status
-            db("""
-                UPDATE tasks 
-                SET status = %s,
-                    completed_at = NOW(),
-                    result_message = %s
-                WHERE id = %s
-            """, (TASK_STATUS['FAILED'], json.dumps(result), task_id))
-            
             status_queue.put({
+                'sensor': sensor_name,
                 'status': TASK_STATUS['FAILED'],
                 'result': result
             })
@@ -111,27 +91,20 @@ def task_thread(
         # Download PCAP if collection successful
         if result.get('has_data'):
             # Update to retrieving state
-            update_task_status(task_id, TASK_STATUS['RETRIEVING'], {
-                'temp_path': f'/tmp/task_{task_id}.pcap'
+            status_queue.put({
+                'sensor': sensor_name,
+                'status': TASK_STATUS['RETRIEVING'],
+                'result': {'temp_path': job_params['output_path']}
             })
-            status_queue.put({'status': TASK_STATUS['RETRIEVING']})
 
             success, download_result = download_pcap(
                 sensor_fqdn,
-                task_id,
+                job_params['output_path'],
                 result.get('remote_path')
             )
             if not success:
-                # Set completed_at before sending final status
-                db("""
-                    UPDATE tasks 
-                    SET status = %s,
-                        completed_at = NOW(),
-                        result_message = %s
-                    WHERE id = %s
-                """, (TASK_STATUS['FAILED'], json.dumps(download_result), task_id))
-                
                 status_queue.put({
+                    'sensor': sensor_name,
                     'status': TASK_STATUS['FAILED'],
                     'result': download_result
                 })
@@ -139,23 +112,9 @@ def task_thread(
 
             result.update(download_result)
 
-        # Set completed_at before sending final success status
-        db("""
-            UPDATE tasks 
-            SET status = %s,
-                completed_at = NOW(),
-                pcap_size = %s,
-                result_message = %s
-            WHERE id = %s
-        """, (
-            TASK_STATUS['COMPLETE'],
-            result.get('file_size', '0'),
-            'Task completed successfully',
-            task_id
-        ))
-
-        # Send final status
+        # Send final success status
         status_queue.put({
+            'sensor': sensor_name,
             'status': TASK_STATUS['COMPLETE'],
             'result': result,
             'has_data': result.get('has_data', False)
@@ -163,95 +122,16 @@ def task_thread(
 
     except Exception as e:
         logger.error(f"Error in task thread: {e}")
-        
-        # Set completed_at before sending final error status
-        try:
-            db("""
-                UPDATE tasks 
-                SET status = %s,
-                    completed_at = NOW(),
-                    result_message = %s
-                WHERE id = %s
-            """, (TASK_STATUS['FAILED'], str(e), task_id))
-        except Exception as db_error:
-            logger.error(f"Error updating task status: {db_error}")
-            
         status_queue.put({
+            'sensor': sensor_name,
             'status': TASK_STATUS['FAILED'],
             'result': {'message': str(e)}
         })
 
-def create_task_record(job_id: int, sensor_name: str) -> Optional[int]:
-    """Create task record in database"""
-    try:
-        result = db("""
-            INSERT INTO tasks (
-                job_id,
-                sensor,
-                status,
-                pcap_size,
-                temp_path,
-                result_message,
-                start_time,
-                end_time,
-                created_at
-            ) VALUES (
-                %s, %s, %s::task_status, NULL, NULL, NULL, NULL, NULL, NOW()
-            ) RETURNING id
-        """, (job_id, sensor_name, TASK_STATUS['SUBMITTED']))
-        return result[0] if result else None
-    except Exception as e:
-        logger.error(f"Error creating task record: {e}")
-        return None
-
-def update_task_status(task_id: int, status: str, result: dict = None) -> None:
-    """Update task status in database"""
-    try:
-        if status == TASK_STATUS['RUNNING']:
-            db("""
-                UPDATE tasks 
-                SET status = %s,
-                    start_time = NOW()
-                WHERE id = %s
-            """, (TASK_STATUS['RUNNING'], task_id))
-            
-        elif status == TASK_STATUS['RETRIEVING']:
-            db("""
-                UPDATE tasks 
-                SET status = %s,
-                    temp_path = %s
-                WHERE id = %s
-            """, (TASK_STATUS['RETRIEVING'], result.get('temp_path'), task_id))
-            
-        elif status in [TASK_STATUS['COMPLETE'], TASK_STATUS['FAILED'], TASK_STATUS['SKIPPED']]:
-            db("""
-                UPDATE tasks 
-                SET status = %s,
-                    end_time = NOW(),
-                    pcap_size = %s,
-                    result_message = %s
-                WHERE id = %s
-            """, (
-                status,
-                result.get('file_size'),
-                result.get('message', json.dumps(result)),
-                task_id
-            ))
-        else:
-            db("""
-                UPDATE tasks 
-                SET status = %s,
-                    result_message = %s
-                WHERE id = %s
-            """, (status, json.dumps(result) if result else None, task_id))
-            
-    except Exception as e:
-        logger.error(f"Error updating task status: {e}")
-
 def run_pcap_collection(
     sensor_fqdn: str,
     job_params: dict,
-    task_id: int
+    job_id: int
 ) -> tuple[bool, dict]:
     """Run PCAP collection on remote sensor
 
@@ -269,14 +149,14 @@ def run_pcap_collection(
 
         return True, {
             'has_data': True,
-            'remote_path': f'/tmp/pcap_{task_id}.pcap'
+            'remote_path': f'/tmp/pcap_{job_id}.pcap'
         }
     except Exception as e:
         return False, {'error': str(e)}
 
 def download_pcap(
     sensor_fqdn: str,
-    task_id: int,
+    output_path: str,
     remote_path: str
 ) -> tuple[bool, dict]:
     """Download PCAP file from sensor
@@ -293,9 +173,8 @@ def download_pcap(
         logger.info("[[[ DEBUG DOWNLOAD END ]]]")
         # Implement SCP/SFTP download END
 
-        local_path = f'/tmp/task_{task_id}.pcap'
         return True, {
-            'local_path': local_path,
+            'local_path': output_path,
             'file_size': 1024
         }
     except Exception as e:

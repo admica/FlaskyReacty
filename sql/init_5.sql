@@ -80,6 +80,7 @@ ALTER TABLE public.jobs OWNER TO pcapuser;
 CREATE TABLE public.tasks (
     id integer NOT NULL GENERATED ALWAYS AS IDENTITY,
     job_id integer NOT NULL,
+    task__id integer NOT NULL,
     sensor character varying(255) NOT NULL,
     status public.task_status DEFAULT 'Submitted'::public.task_status NOT NULL,
     pcap_size character varying(20),

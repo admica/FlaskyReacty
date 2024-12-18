@@ -55,12 +55,20 @@ try:
         raise configparser.Error(f"Missing required sections: {', '.join(missing_sections)}")
 
     # Load and validate critical values
-    PCAP_PATH = os.path.abspath(os.path.join(
+    JOBS_PATH = os.path.abspath(os.path.join(
         os.path.dirname(__file__),
-        config.get('DOWNLOADS', 'pcap_path')
+        config.get('DOWNLOADS', 'jobs_path')
     ))
     # Ensure directory exists
-    os.makedirs(PCAP_PATH, exist_ok=True)
+    os.makedirs(JOBS_PATH, exist_ok=True)
+
+    TASKS_PATH = os.path.abspath(os.path.join(
+        os.path.dirname(__file__),
+        config.get('DOWNLOADS', 'tasks_path')
+    ))
+
+    # Ensure directory exists
+    os.makedirs(JOBS_PATH, exist_ok=True)
 
     URL_EXPIRATION = 21600  # 6 hours in seconds
     URL_SECRET = config.get('SERVER', 'secret_key')
