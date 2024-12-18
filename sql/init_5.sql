@@ -56,8 +56,8 @@ CREATE TABLE public.jobs (
     id integer DEFAULT nextval('public.jobs_id_seq'::regclass) NOT NULL,
     location varchar(50) NOT NULL,
     description text,
-    source_ip inet,
-    dest_ip inet,
+    src_ip inet,
+    dst_ip inet,
     event_time timestamp with time zone,
     start_time timestamp with time zone,    -- PCAP search start boundary
     end_time timestamp with time zone,      -- PCAP search end boundary
