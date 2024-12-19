@@ -283,7 +283,7 @@ export function Dashboard() {
                     onChange={(e) => setFormData(prev => ({ ...prev, dst_ip: e.target.value }))}
                   />
                 </Grid.Col>
-                <Grid.Col span={3}>
+                <Grid.Col span={4} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
                   <Button 
                     type="submit" 
                     loading={submitting}
