@@ -326,7 +326,7 @@ export function AdminPage() {
   return (
     <Container fluid style={{ position: 'relative', minHeight: '100vh' }}>
       <Group justify="space-between" mb="md">
-        <Title order={2}>System Administration</Title>
+        <Title order={3}>System Administration</Title>
         <Group>
           <Box>
             <Text size="sm" mb={3}>Auto-refresh</Text>
@@ -338,8 +338,8 @@ export function AdminPage() {
                   { value: '0', label: 'Manual refresh' },
                   { value: '10', label: '10 seconds' },
                   { value: '30', label: '30 seconds' },
-                  { value: '60', label: '1 minute' },
-                  { value: '300', label: '5 minutes' },
+                  { value: '180', label: '3 minutes' },
+                  { value: '600', label: '10 minutes' },
                 ]}
                 styles={{ input: { height: 36 } }}
               />
@@ -376,7 +376,7 @@ export function AdminPage() {
 
       <Grid>
         {/* System Health Section */}
-        <Grid.Col span={4}>
+        <Grid.Col span={3.3}>
           <Stack gap="md">
             <Paper shadow="sm" p="md" withBorder>
               <Group mb="md">
@@ -416,7 +416,7 @@ export function AdminPage() {
         </Grid.Col>
 
         {/* Storage Status Section */}
-        <Grid.Col span={8}>
+        <Grid.Col span={8.7}>
           <Paper shadow="sm" p="md" withBorder>
             <Group mb="xs" justify="space-between">
               <Group gap="xs">

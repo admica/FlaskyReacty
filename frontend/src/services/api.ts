@@ -580,16 +580,28 @@ const apiService = {
     },
 
     async getAdmins(): Promise<Admin[]> {
-        const response = await this.get('/api/v1/admin/users');
-        return response.admins;
+        try {
+            const response = await api.get('/admin/users');
+            return response.data.admins || [];
+        } catch (error: any) {
+            throw logApiError('Error fetching admin users', error);
+        }
     },
 
     async addAdmin(username: string): Promise<void> {
-        await this.post('/api/v1/admin/users', { username });
+        try {
+            await api.post('/admin/users', { username });
+        } catch (error: any) {
+            throw logApiError('Error adding admin user', error);
+        }
     },
 
     async removeAdmin(username: string): Promise<void> {
-        await this.delete(`/api/v1/admin/users/${username}`);
+        try {
+            await api.delete(`/admin/users/${username}`);
+        } catch (error: any) {
+            throw logApiError('Error removing admin user', error);
+        }
     }
 };
 

@@ -13,7 +13,7 @@ import json
 # Import shared resources
 from simpleLogger import SimpleLogger
 from cache_utils import redis_client
-from core import db, rate_limit
+from core import db, rate_limit, config
 
 # Initialize logger
 logger = SimpleLogger('admin')
@@ -297,52 +297,40 @@ def get_cache_metrics():
 def get_admin_users():
     """Get list of admin users"""
     try:
-        # Query admin_users table
+        # Get admin users from local config
+        local_admins = []
+        local_users = config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('role') == 'admin':
+                    local_admins.append({
+                        'username': user_data.get('username'),
+                        'created_at': None,  # Local users don't have creation date
+                        'last_active': None  # Local users don't track activity
+                    })
+            except json.JSONDecodeError:
+                continue
+
+        # Get admin users from database (LDAP users)
         rows = db("""
-            SELECT username, added_by, added_date
+            SELECT username, added_date, NULL as last_active
             FROM admin_users
             ORDER BY username
         """)
-        
-        admins = []
-        for row in rows:
-            admins.append({
-                'username': row[0],
-                'added_by': row[1],
-                'added_date': row[2].isoformat() if row[2] else None
-            })
-            
+
+        # Combine local and LDAP admin users
+        admins = local_admins + [{
+            'username': row[0],
+            'created_at': row[1].isoformat() if row[1] else None,
+            'last_active': row[2].isoformat() if row[2] else None
+        } for row in rows]
+
         return jsonify({'admins': admins}), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting admin users: {e}")
         return jsonify({"error": "Failed to get admin users"}), 500
-
-@admin_bp.route('/api/v1/admin/users/<username>', methods=['GET'])
-@admin_required()
-@rate_limit()
-def get_admin_user(username):
-    """Get details for a specific admin user"""
-    try:
-        # Query admin_users table
-        row = db("""
-            SELECT username, added_by, added_date
-            FROM admin_users
-            WHERE username = %s
-        """, (username,))
-        
-        if not row:
-            return jsonify({"error": "Admin user not found"}), 404
-            
-        return jsonify({
-            'username': row[0][0],
-            'added_by': row[0][1],
-            'added_date': row[0][2].isoformat() if row[0][2] else None
-        }), 200
-        
-    except Exception as e:
-        logger.error(f"Error getting admin user {username}: {e}")
-        return jsonify({"error": "Failed to get admin user"}), 500
 
 @admin_bp.route('/api/v1/admin/users', methods=['POST'])
 @admin_required()
@@ -353,30 +341,36 @@ def add_admin_user():
         data = request.get_json()
         if not data or 'username' not in data:
             return jsonify({"error": "Username is required"}), 400
-            
+
         username = data['username'].strip().lower()
-        added_by = get_jwt_identity()
-        
-        # Check if user already exists
-        existing = db("SELECT username FROM admin_users WHERE username = %s", (username,))
-        if existing:
-            return jsonify({"error": "Admin user already exists"}), 409
-            
-        # Add new admin user
+        if not username:
+            return jsonify({"error": "Invalid username"}), 400
+
+        # Check if user is already an admin in local config
+        local_users = config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('username') == username and user_data.get('role') == 'admin':
+                    return jsonify({"error": "User is already an admin"}), 409
+            except json.JSONDecodeError:
+                continue
+
+        # Check if user is already an admin in database
+        rows = db("SELECT username FROM admin_users WHERE username = %s", [username])
+        if rows:
+            return jsonify({"error": "User is already an admin"}), 409
+
+        # Add user to admin_users table
+        current_user = get_jwt_identity()
         db("""
             INSERT INTO admin_users (username, added_by)
             VALUES (%s, %s)
-        """, (username, added_by))
-        
-        # Add audit log entry
-        db("""
-            INSERT INTO admin_audit_log (action, username, changed_by)
-            VALUES ('add_admin', %s, %s)
-        """, (username, added_by))
-        
-        logger.info(f"Added new admin user: {username} (by {added_by})")
+        """, [username, current_user])
+
+        logger.info(f"Added new admin user: {username} (by {current_user})")
         return jsonify({"message": "Admin user added successfully"}), 201
-        
+
     except Exception as e:
         logger.error(f"Error adding admin user: {e}")
         return jsonify({"error": "Failed to add admin user"}), 500
@@ -385,26 +379,38 @@ def add_admin_user():
 @admin_required()
 @rate_limit()
 def remove_admin_user(username):
-    """Remove an admin user"""
+    """Remove admin privileges from a user"""
     try:
-        # Check if user exists
-        existing = db("SELECT username FROM admin_users WHERE username = %s", (username,))
-        if not existing:
+        username = username.strip().lower()
+        current_user = get_jwt_identity()
+
+        # Prevent self-deletion
+        if username == current_user:
+            return jsonify({"error": "Cannot remove admin privileges from yourself"}), 403
+
+        # Check if user is a local admin (cannot be removed)
+        local_users = config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('username') == username and user_data.get('role') == 'admin':
+                    return jsonify({"error": "Cannot remove admin privileges from local admin users"}), 403
+            except json.JSONDecodeError:
+                continue
+
+        # Remove user from admin_users table
+        result = db("""
+            DELETE FROM admin_users
+            WHERE username = %s
+            RETURNING username
+        """, [username])
+
+        if not result:
             return jsonify({"error": "Admin user not found"}), 404
-            
-        # Remove admin user
-        db("DELETE FROM admin_users WHERE username = %s", (username,))
-        
-        # Add audit log entry
-        changed_by = get_jwt_identity()
-        db("""
-            INSERT INTO admin_audit_log (action, username, changed_by)
-            VALUES ('remove_admin', %s, %s)
-        """, (username, changed_by))
-        
-        logger.info(f"Removed admin user: {username} (by {changed_by})")
-        return jsonify({"message": "Admin user removed successfully"}), 200
-        
+
+        logger.info(f"Removed admin privileges from user: {username} (by {current_user})")
+        return jsonify({"message": "Admin privileges removed successfully"}), 200
+
     except Exception as e:
         logger.error(f"Error removing admin user: {e}")
         return jsonify({"error": "Failed to remove admin user"}), 500
