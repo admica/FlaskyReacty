@@ -78,6 +78,7 @@ export interface Job {
     tz: string;
     result_size: string | null;
     result_path: string | null;
+    result_message: string | null;
     created_at: string | null;
     started_at: string | null;
     completed_at: string | null;
@@ -511,16 +512,20 @@ const apiService = {
 
     submitJob: async (jobData: {
         location: string;
-        src_ip?: string;
-        dst_ip?: string;
-        start_time: string;
-        end_time: string;
-        description: string;
-        event_time?: string;
-        tz: string;
+        params: {
+            description?: string;
+            src_ip?: string;
+            dst_ip?: string;
+            event_time?: string;
+            start_time?: string;
+            end_time?: string;
+            tz: string;
+        };
     }): Promise<{ job_id: number }> => {
         try {
-            const response = await api.post('/submit', jobData);
+            console.log('Submitting job with data:', jobData);
+            const response = await api.post('/jobs/submit', jobData);
+            console.log('Job submission response:', response.data);
             return response.data;
         } catch (error: any) {
             throw logApiError('Error submitting job', error);

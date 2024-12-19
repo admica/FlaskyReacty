@@ -41,7 +41,19 @@ export function Dashboard() {
     event_time: null as Date | null,
     start_time: null as Date | null,
     end_time: null as Date | null,
+    timezone: 'UTC'  // Default to UTC
   });
+
+  // Common timezone options
+  const timezoneOptions = [
+    { value: 'UTC', label: 'UTC' },
+    { value: 'America/New_York', label: 'Eastern Time (ET)' },
+    { value: 'America/Chicago', label: 'Central Time (CT)' },
+    { value: 'America/Denver', label: 'Mountain Time (MT)' },
+    { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+    { value: 'America/Anchorage', label: 'Alaska Time (AKT)' },
+    { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' }
+  ];
 
   const loadJobs = async () => {
     try {
@@ -98,20 +110,23 @@ export function Dashboard() {
         return;
       }
 
+      // Format the job data to match API expectations
       const jobData = {
-        location: formData.location,
+        location: formData.location.toUpperCase(),
         params: {
           description: formData.description || undefined,
           src_ip: formData.src_ip || undefined,
           dst_ip: formData.dst_ip || undefined,
-          event_time: formData.event_time?.toISOString(),
-          start_time: formData.start_time?.toISOString(),
-          end_time: formData.end_time?.toISOString(),
-          tz: Intl.DateTimeFormat().resolvedOptions().timeZone
+          event_time: formData.event_time ? formData.event_time.toISOString() + "Z" : undefined,
+          start_time: formData.start_time ? formData.start_time.toISOString() + "Z" : undefined,
+          end_time: formData.end_time ? formData.end_time.toISOString() + "Z" : undefined,
+          tz: formData.timezone
         }
       };
 
-      await apiService.submitJob(jobData);
+      // Submit the job
+      const result = await apiService.submitJob(jobData);
+      console.log('Job submitted successfully:', result);
       
       // Clear form
       setFormData({
@@ -122,6 +137,7 @@ export function Dashboard() {
         event_time: null,
         start_time: null,
         end_time: null,
+        timezone: 'UTC'
       });
 
       // Refresh jobs list
@@ -177,10 +193,20 @@ export function Dashboard() {
     try {
       // Try to parse as JSON
       const parsed = JSON.parse(message);
+      // Convert the parsed object into a list of key-value pairs
       return (
-        <Code block style={{ whiteSpace: 'pre-wrap' }}>
-          {JSON.stringify(parsed, null, 2)}
-        </Code>
+        <Stack gap={2}>
+          {Object.entries(parsed).map(([key, value]) => (
+            <Group key={key} gap="xs">
+              <Text size="sm" fw={500} style={{ textTransform: 'capitalize' }}>
+                {key.replace(/_/g, ' ')}:
+              </Text>
+              <Text size="sm">
+                {typeof value === 'boolean' ? value.toString() : String(value)}
+              </Text>
+            </Group>
+          ))}
+        </Stack>
       );
     } catch {
       // If not JSON, return as is
@@ -215,7 +241,7 @@ export function Dashboard() {
               <Title order={3}>Submit New Job</Title>
 
               <Grid>
-                <Grid.Col span={4}>
+                <Grid.Col span={3}>
                   <Select
                     label="Location"
                     placeholder="Select location"
@@ -225,7 +251,7 @@ export function Dashboard() {
                     required
                   />
                 </Grid.Col>
-                <Grid.Col span={8}>
+                <Grid.Col span={9}>
                   <TextInput
                     label="Description"
                     placeholder="Job description"
@@ -233,7 +259,7 @@ export function Dashboard() {
                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   />
                 </Grid.Col>
-                <Grid.Col span={4}>
+                <Grid.Col span={3}>
                   <DateTimePicker
                     label="Event Time (Optional)"
                     placeholder="Select event time"
@@ -243,7 +269,7 @@ export function Dashboard() {
                     withSeconds
                   />
                 </Grid.Col>
-                <Grid.Col span={4}>
+                <Grid.Col span={3}>
                   <DateTimePicker
                     label="Start Time"
                     placeholder="Select start time"
@@ -255,7 +281,7 @@ export function Dashboard() {
                     withSeconds
                   />
                 </Grid.Col>
-                <Grid.Col span={4}>
+                <Grid.Col span={3}>
                   <DateTimePicker
                     label="End Time"
                     placeholder="Select end time"
@@ -267,7 +293,17 @@ export function Dashboard() {
                     withSeconds
                   />
                 </Grid.Col>
-                <Grid.Col span={4}>
+                <Grid.Col span={3}>
+                  <Select
+                    label="Timezone"
+                    placeholder="Select timezone"
+                    value={formData.timezone}
+                    onChange={(value) => setFormData(prev => ({ ...prev, timezone: value || 'UTC' }))}
+                    data={timezoneOptions}
+                    searchable
+                  />
+                </Grid.Col>
+                <Grid.Col span={3}>
                   <TextInput
                     label="Source IP"
                     placeholder="Enter source IP"
@@ -275,7 +311,7 @@ export function Dashboard() {
                     onChange={(e) => setFormData(prev => ({ ...prev, src_ip: e.target.value }))}
                   />
                 </Grid.Col>
-                <Grid.Col span={4}>
+                <Grid.Col span={3}>
                   <TextInput
                     label="Destination IP"
                     placeholder="Enter destination IP"
@@ -283,7 +319,7 @@ export function Dashboard() {
                     onChange={(e) => setFormData(prev => ({ ...prev, dst_ip: e.target.value }))}
                   />
                 </Grid.Col>
-                <Grid.Col span={4} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
+                <Grid.Col span={6} style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end' }}>
                   <Button 
                     type="submit" 
                     loading={submitting}
@@ -312,7 +348,7 @@ export function Dashboard() {
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>ID</Table.Th>
-                      <Table.Th>Status</Table.Th>
+                      <Table.Th style={{ width: '120px' }}>Status</Table.Th>
                       <Table.Th>Description</Table.Th>
                       <Table.Th>Location</Table.Th>
                       <Table.Th>Source IP</Table.Th>
@@ -331,8 +367,11 @@ export function Dashboard() {
                         onClick={() => setSelectedJob(job)}
                       >
                         <Table.Td>{job.id}</Table.Td>
-                        <Table.Td>
-                          <Badge color={getStatusColor(job.status)}>
+                        <Table.Td style={{ width: '120px' }}>
+                          <Badge 
+                            color={getStatusColor(job.status)}
+                            style={{ minWidth: '100px', textAlign: 'center' }}
+                          >
                             {job.status}
                           </Badge>
                         </Table.Td>
@@ -430,7 +469,7 @@ export function Dashboard() {
                       <Table.Tr>
                         <Table.Th>Task ID</Table.Th>
                         <Table.Th>Sensor</Table.Th>
-                        <Table.Th>Status</Table.Th>
+                        <Table.Th style={{ width: '120px' }}>Status</Table.Th>
                         <Table.Th>Created</Table.Th>
                         <Table.Th>Started</Table.Th>
                         <Table.Th>Completed</Table.Th>
@@ -443,8 +482,11 @@ export function Dashboard() {
                         <Table.Tr key={task.id}>
                           <Table.Td>{task.task_id}</Table.Td>
                           <Table.Td>{task.sensor}</Table.Td>
-                          <Table.Td>
-                            <Badge color={getStatusColor(task.status)}>
+                          <Table.Td style={{ width: '120px' }}>
+                            <Badge 
+                              color={getStatusColor(task.status)}
+                              style={{ minWidth: '100px', textAlign: 'center' }}
+                            >
                               {task.status}
                             </Badge>
                           </Table.Td>
