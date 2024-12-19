@@ -5,7 +5,7 @@ import psutil
 import os
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 import threading
 from functools import wraps
 import json
@@ -290,3 +290,121 @@ def get_cache_metrics():
     except Exception as e:
         logger.error(f"Error getting cache metrics: {e}")
         return jsonify({"error": f"Failed to get cache metrics: {str(e)}"}), 500
+
+@admin_bp.route('/api/v1/admin/users', methods=['GET'])
+@admin_required()
+@rate_limit()
+def get_admin_users():
+    """Get list of admin users"""
+    try:
+        # Query admin_users table
+        rows = db("""
+            SELECT username, added_by, added_date
+            FROM admin_users
+            ORDER BY username
+        """)
+        
+        admins = []
+        for row in rows:
+            admins.append({
+                'username': row[0],
+                'added_by': row[1],
+                'added_date': row[2].isoformat() if row[2] else None
+            })
+            
+        return jsonify({'admins': admins}), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting admin users: {e}")
+        return jsonify({"error": "Failed to get admin users"}), 500
+
+@admin_bp.route('/api/v1/admin/users/<username>', methods=['GET'])
+@admin_required()
+@rate_limit()
+def get_admin_user(username):
+    """Get details for a specific admin user"""
+    try:
+        # Query admin_users table
+        row = db("""
+            SELECT username, added_by, added_date
+            FROM admin_users
+            WHERE username = %s
+        """, (username,))
+        
+        if not row:
+            return jsonify({"error": "Admin user not found"}), 404
+            
+        return jsonify({
+            'username': row[0][0],
+            'added_by': row[0][1],
+            'added_date': row[0][2].isoformat() if row[0][2] else None
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting admin user {username}: {e}")
+        return jsonify({"error": "Failed to get admin user"}), 500
+
+@admin_bp.route('/api/v1/admin/users', methods=['POST'])
+@admin_required()
+@rate_limit()
+def add_admin_user():
+    """Add a new admin user"""
+    try:
+        data = request.get_json()
+        if not data or 'username' not in data:
+            return jsonify({"error": "Username is required"}), 400
+            
+        username = data['username'].strip().lower()
+        added_by = get_jwt_identity()
+        
+        # Check if user already exists
+        existing = db("SELECT username FROM admin_users WHERE username = %s", (username,))
+        if existing:
+            return jsonify({"error": "Admin user already exists"}), 409
+            
+        # Add new admin user
+        db("""
+            INSERT INTO admin_users (username, added_by)
+            VALUES (%s, %s)
+        """, (username, added_by))
+        
+        # Add audit log entry
+        db("""
+            INSERT INTO admin_audit_log (action, username, changed_by)
+            VALUES ('add_admin', %s, %s)
+        """, (username, added_by))
+        
+        logger.info(f"Added new admin user: {username} (by {added_by})")
+        return jsonify({"message": "Admin user added successfully"}), 201
+        
+    except Exception as e:
+        logger.error(f"Error adding admin user: {e}")
+        return jsonify({"error": "Failed to add admin user"}), 500
+
+@admin_bp.route('/api/v1/admin/users/<username>', methods=['DELETE'])
+@admin_required()
+@rate_limit()
+def remove_admin_user(username):
+    """Remove an admin user"""
+    try:
+        # Check if user exists
+        existing = db("SELECT username FROM admin_users WHERE username = %s", (username,))
+        if not existing:
+            return jsonify({"error": "Admin user not found"}), 404
+            
+        # Remove admin user
+        db("DELETE FROM admin_users WHERE username = %s", (username,))
+        
+        # Add audit log entry
+        changed_by = get_jwt_identity()
+        db("""
+            INSERT INTO admin_audit_log (action, username, changed_by)
+            VALUES ('remove_admin', %s, %s)
+        """, (username, changed_by))
+        
+        logger.info(f"Removed admin user: {username} (by {changed_by})")
+        return jsonify({"message": "Admin user removed successfully"}), 200
+        
+    except Exception as e:
+        logger.error(f"Error removing admin user: {e}")
+        return jsonify({"error": "Failed to remove admin user"}), 500

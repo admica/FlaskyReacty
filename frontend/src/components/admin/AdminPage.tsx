@@ -1,9 +1,10 @@
 // PATH: src/components/admin/AdminPage.tsx
 import { useEffect, useState, useRef } from 'react';
-import { Container, Grid, Paper, Text, Title, RingProgress, Group, Stack, Table, Button, Card, ActionIcon, ScrollArea, Center, Box, Select } from '@mantine/core';
+import { Container, Grid, Paper, Text, Title, RingProgress, Group, Stack, Table, Button, Card, ActionIcon, ScrollArea, Center, Box, Select, TextInput } from '@mantine/core';
 import { IconDatabase, IconDeviceFloppy, IconCpu, IconRefresh, IconTrash, IconFileText } from '@tabler/icons-react';
 import apiService from '../../services/api';
 import { LogViewer } from './LogViewer';
+import type { Admin } from '../../services/api';
 
 const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 B';
@@ -28,6 +29,11 @@ const formatDate = (dateStr: string): string => {
   } else {
     return date.toLocaleDateString();
   }
+};
+
+const formatDateTime = (date: string | null): string => {
+  if (!date) return '-';
+  return new Date(date).toLocaleString();
 };
 
 interface HealthStatus {
@@ -86,6 +92,8 @@ export function AdminPage() {
   const [refreshInterval, setRefreshInterval] = useState<string>('300');
   const [refreshProgress, setRefreshProgress] = useState(100);
   const [animatedProgress, setAnimatedProgress] = useState<{ [key: string]: number }>({});
+  const [admins, setAdmins] = useState<Admin[]>([]);
+  const username = localStorage.getItem('username');
 
   useEffect(() => {
     // Check if user is admin
@@ -97,6 +105,7 @@ export function AdminPage() {
     }
 
     fetchAllData();
+    loadAdmins();
   }, []);
 
   useEffect(() => {
@@ -289,6 +298,19 @@ export function AdminPage() {
     if (percent > 85) return 'red';
     if (percent > 70) return 'yellow';
     return 'blue';
+  };
+
+  const loadAdmins = async () => {
+    try {
+      addDebugMessage('Loading admin users...');
+      const adminUsers = await apiService.getAdmins();
+      setAdmins(adminUsers);
+      addDebugMessage(`Loaded ${adminUsers.length} admin users`);
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      addDebugMessage(`Error loading admin users: ${errorMessage}`);
+      console.error('Error loading admins:', error);
+    }
   };
 
   if (isLoading) {
@@ -519,6 +541,95 @@ export function AdminPage() {
                 )}
               </Grid.Col>
             </Grid>
+          </Paper>
+        </Grid.Col>
+
+        {/* Admin Users Section */}
+        <Grid.Col span={12}>
+          <Paper shadow="sm" p="md" withBorder>
+            <Group mb="md" justify="space-between">
+              <Title order={3}>Admin Users</Title>
+            </Group>
+
+            {/* Add Admin Form */}
+            <Paper withBorder p="md" mb="md">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const username = (form.elements.namedItem('username') as HTMLInputElement).value;
+                if (username) {
+                  addDebugMessage(`Adding new admin user: ${username}`);
+                  apiService.addAdmin(username)
+                    .then(() => {
+                      addDebugMessage(`Successfully added admin user: ${username}`);
+                      loadAdmins();
+                      form.reset();
+                    })
+                    .catch(error => {
+                      const errorMessage = error instanceof Error ? error.message : String(error);
+                      addDebugMessage(`Error adding admin user: ${errorMessage}`);
+                      console.error('Error adding admin:', error);
+                    });
+                }
+              }}>
+                <Group align="flex-end">
+                  <TextInput
+                    label="Username"
+                    name="username"
+                    placeholder="Enter username"
+                    required
+                    style={{ flex: 1 }}
+                  />
+                  <Button type="submit">Add Admin</Button>
+                </Group>
+              </form>
+            </Paper>
+
+            {/* Admin Users List */}
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Username</Table.Th>
+                  <Table.Th>Added On</Table.Th>
+                  <Table.Th>Last Active</Table.Th>
+                  <Table.Th>Actions</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {admins.map((admin) => (
+                  <Table.Tr key={admin.username}>
+                    <Table.Td>{admin.username}</Table.Td>
+                    <Table.Td>{formatDateTime(admin.created_at)}</Table.Td>
+                    <Table.Td>{formatDateTime(admin.last_active)}</Table.Td>
+                    <Table.Td>
+                      <Button
+                        variant="subtle"
+                        color="red"
+                        size="xs"
+                        disabled={admin.username === username} // Prevent self-deletion
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to remove admin privileges from ${admin.username}?`)) {
+                            addDebugMessage(`Removing admin user: ${admin.username}`);
+                            apiService.removeAdmin(admin.username)
+                              .then(() => {
+                                addDebugMessage(`Successfully removed admin user: ${admin.username}`);
+                                loadAdmins();
+                              })
+                              .catch(error => {
+                                const errorMessage = error instanceof Error ? error.message : String(error);
+                                addDebugMessage(`Error removing admin user: ${errorMessage}`);
+                                console.error('Error removing admin:', error);
+                              });
+                          }
+                        }}
+                      >
+                        Remove Admin
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
           </Paper>
         </Grid.Col>
 

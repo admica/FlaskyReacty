@@ -205,6 +205,12 @@ export interface DevicesResponse {
     sensor: string;
 }
 
+export interface Admin {
+  username: string;
+  created_at: string;
+  last_active: string;
+}
+
 const apiService = {
     login: async (username: string, password: string): Promise<LoginResponse> => {
         console.log('Attempting login for user:', username);
@@ -571,6 +577,19 @@ const apiService = {
         } catch (error: any) {
             throw logApiError(`Error posting to ${endpoint}`, error);
         }
+    },
+
+    async getAdmins(): Promise<Admin[]> {
+        const response = await this.get('/api/v1/admin/users');
+        return response.admins;
+    },
+
+    async addAdmin(username: string): Promise<void> {
+        await this.post('/api/v1/admin/users', { username });
+    },
+
+    async removeAdmin(username: string): Promise<void> {
+        await this.delete(`/api/v1/admin/users/${username}`);
     }
 };
 
