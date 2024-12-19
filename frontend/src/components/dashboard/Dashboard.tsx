@@ -55,12 +55,14 @@ export function Dashboard() {
     { value: 'Pacific/Honolulu', label: 'Hawaii Time (HT)' }
   ];
 
+  const username = localStorage.getItem('username');
+
   const loadJobs = async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Fetching jobs...');
-      const response = await apiService.getJobs();
+      console.log('Fetching jobs for user:', username);
+      const response = await apiService.getJobs({ username: username || '' });
       console.log('Jobs response:', response);
       setJobs(response);
     } catch (err: any) {

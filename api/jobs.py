@@ -216,8 +216,11 @@ def get_jobs_by_location(location):
 def get_all_jobs():
     """Get all jobs with their associated tasks"""
     try:
-        # Get all jobs with tasks
-        jobs = db("""
+        # Get username from query params
+        username = request.args.get('username')
+        
+        # Build base query
+        query = """
             SELECT 
                 j.id, j.location, j.submitted_by, j.src_ip, j.dst_ip,
                 j.event_time, j.start_time, j.end_time, j.description,
@@ -240,9 +243,22 @@ def get_all_jobs():
                 )) as tasks
             FROM jobs j
             LEFT JOIN tasks t ON t.job_id = j.id
+        """
+        
+        # Add username filter if provided
+        params = []
+        if username:
+            query += " WHERE j.submitted_by = %s"
+            params.append(username)
+            
+        # Add group by and order by
+        query += """
             GROUP BY j.id
             ORDER BY j.id DESC
-        """)
+        """
+        
+        # Execute query
+        jobs = db(query, params)
 
         # Format response
         response = []
