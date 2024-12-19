@@ -215,7 +215,7 @@ export function Dashboard() {
               <Title order={3}>Submit New Job</Title>
 
               <Grid>
-                <Grid.Col span={6}>
+                <Grid.Col span={4}>
                   <Select
                     label="Location"
                     placeholder="Select location"
@@ -225,7 +225,7 @@ export function Dashboard() {
                     required
                   />
                 </Grid.Col>
-                <Grid.Col span={6}>
+                <Grid.Col span={8}>
                   <TextInput
                     label="Description"
                     placeholder="Job description"
@@ -233,23 +233,7 @@ export function Dashboard() {
                     onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   />
                 </Grid.Col>
-                <Grid.Col span={6}>
-                  <TextInput
-                    label="Source IP"
-                    placeholder="Enter source IP"
-                    value={formData.src_ip}
-                    onChange={(e) => setFormData(prev => ({ ...prev, src_ip: e.target.value }))}
-                  />
-                </Grid.Col>
-                <Grid.Col span={6}>
-                  <TextInput
-                    label="Destination IP"
-                    placeholder="Enter destination IP"
-                    value={formData.dst_ip}
-                    onChange={(e) => setFormData(prev => ({ ...prev, dst_ip: e.target.value }))}
-                  />
-                </Grid.Col>
-                <Grid.Col span={6}>
+                <Grid.Col span={4}>
                   <DateTimePicker
                     label="Event Time (Optional)"
                     placeholder="Select event time"
@@ -259,12 +243,7 @@ export function Dashboard() {
                     withSeconds
                   />
                 </Grid.Col>
-                <Grid.Col span={6}>
-                  <Text size="sm" c="dimmed">
-                    If event time is set, start and end times will be automatically calculated
-                  </Text>
-                </Grid.Col>
-                <Grid.Col span={6}>
+                <Grid.Col span={4}>
                   <DateTimePicker
                     label="Start Time"
                     placeholder="Select start time"
@@ -276,7 +255,7 @@ export function Dashboard() {
                     withSeconds
                   />
                 </Grid.Col>
-                <Grid.Col span={6}>
+                <Grid.Col span={4}>
                   <DateTimePicker
                     label="End Time"
                     placeholder="Select end time"
@@ -288,17 +267,32 @@ export function Dashboard() {
                     withSeconds
                   />
                 </Grid.Col>
+                <Grid.Col span={4}>
+                  <TextInput
+                    label="Source IP"
+                    placeholder="Enter source IP"
+                    value={formData.src_ip}
+                    onChange={(e) => setFormData(prev => ({ ...prev, src_ip: e.target.value }))}
+                  />
+                </Grid.Col>
+                <Grid.Col span={4}>
+                  <TextInput
+                    label="Destination IP"
+                    placeholder="Enter destination IP"
+                    value={formData.dst_ip}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dst_ip: e.target.value }))}
+                  />
+                </Grid.Col>
+                <Grid.Col span={3}>
+                  <Button 
+                    type="submit" 
+                    loading={submitting}
+                    disabled={!formData.location || (!formData.src_ip && !formData.dst_ip)}
+                  >
+                    Submit Job
+                  </Button>
+                </Grid.Col>
               </Grid>
-
-              <Group justify="flex-end">
-                <Button 
-                  type="submit" 
-                  loading={submitting}
-                  disabled={!formData.location || (!formData.src_ip && !formData.dst_ip)}
-                >
-                  Submit Job
-                </Button>
-              </Group>
             </Stack>
           </form>
         </Paper>
