@@ -4,6 +4,7 @@ Base test functionality for PCAP Server tests.
 import requests
 import configparser
 import os
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
@@ -39,9 +40,20 @@ class BaseTest:
         config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.ini')
         self.config.read(config_path)
         
-        # Get test user credentials
-        self.auth_username = self.config.get('TEST_USER', 'username')
-        self.auth_password = self.config.get('TEST_USER', 'password')
+        # Get local user credentials
+        local_users = self.config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('role') == 'user':
+                    self.auth_username = user_data.get('username')
+                    self.auth_password = user_data.get('password')
+                    break
+            except json.JSONDecodeError:
+                continue
+        
+        if not hasattr(self, 'auth_username') or not hasattr(self, 'auth_password'):
+            raise Exception("No local user found in config")
     
     def add_result(self, result: TestResult) -> None:
         """Add a test result"""

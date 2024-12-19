@@ -375,7 +375,7 @@ export function AdminPage() {
       </Group>
 
       <Grid>
-        {/* System Health Section */}
+        {/* System Health dSection */}
         <Grid.Col span={3.3}>
           <Stack gap="md">
             <Paper shadow="sm" p="md" withBorder>
