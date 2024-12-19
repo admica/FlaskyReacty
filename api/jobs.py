@@ -209,3 +209,66 @@ def get_jobs_by_location(location):
     except Exception as e:
         logger.error(f"Error getting jobs for location {location}: {e}")
         return jsonify({"error": str(e)}), 500
+
+@jobs_bp.route('/api/v1/jobs', methods=['GET'])
+@jwt_required()
+@rate_limit()
+def get_all_jobs():
+    """Get all jobs with their associated tasks"""
+    try:
+        # Get all jobs with tasks
+        jobs = db("""
+            SELECT 
+                j.id, j.location, j.submitted_by, j.src_ip, j.dst_ip,
+                j.event_time, j.start_time, j.end_time, j.description,
+                j.status, j.result_message, j.result_size, j.result_path,
+                j.created_at, j.started_at, j.completed_at,
+                json_agg(json_build_object(
+                    'id', t.id,
+                    'job_id', t.job_id,
+                    'task_id', t.task_id,
+                    'sensor', t.sensor,
+                    'status', t.status,
+                    'pcap_size', t.pcap_size,
+                    'temp_path', t.temp_path,
+                    'result_message', t.result_message,
+                    'start_time', t.start_time,
+                    'end_time', t.end_time,
+                    'created_at', t.created_at,
+                    'started_at', t.started_at,
+                    'completed_at', t.completed_at
+                )) as tasks
+            FROM jobs j
+            LEFT JOIN tasks t ON t.job_id = j.id
+            GROUP BY j.id
+            ORDER BY j.id DESC
+        """)
+
+        # Format response
+        response = []
+        for job in jobs:
+            response.append({
+                'id': job[0],
+                'location': job[1],
+                'submitted_by': job[2],
+                'src_ip': str(job[3]) if job[3] else None,
+                'dst_ip': str(job[4]) if job[4] else None,
+                'event_time': job[5].isoformat() if job[5] else None,
+                'start_time': job[6].isoformat() if job[6] else None,
+                'end_time': job[7].isoformat() if job[7] else None,
+                'description': job[8],
+                'status': job[9],
+                'result_message': job[10],
+                'result_size': job[11],
+                'result_path': job[12],
+                'created_at': job[13].isoformat() if job[13] else None,
+                'started_at': job[14].isoformat() if job[14] else None,
+                'completed_at': job[15].isoformat() if job[15] else None,
+                'tasks': job[16] if job[16] and job[16][0] is not None else []
+            })
+
+        return jsonify({'jobs': response}), 200
+
+    except Exception as e:
+        logger.error(f"Error getting all jobs: {e}")
+        return jsonify({"error": str(e)}), 500
