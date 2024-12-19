@@ -19,6 +19,7 @@ import {
   Modal,
   ScrollArea,
   Box,
+  Code,
 } from '@mantine/core';
 import { DateTimePicker } from '@mantine/dates';
 import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
@@ -171,6 +172,22 @@ export function Dashboard() {
     return `${value.toFixed(1)} ${units[unitIndex]}`;
   };
 
+  const formatMessage = (message: string | null) => {
+    if (!message) return '-';
+    try {
+      // Try to parse as JSON
+      const parsed = JSON.parse(message);
+      return (
+        <Code block style={{ whiteSpace: 'pre-wrap' }}>
+          {JSON.stringify(parsed, null, 2)}
+        </Code>
+      );
+    } catch {
+      // If not JSON, return as is
+      return message;
+    }
+  };
+
   return (
     <Box p="md">
       <Stack gap="md">
@@ -306,10 +323,6 @@ export function Dashboard() {
                       <Table.Th>Location</Table.Th>
                       <Table.Th>Source IP</Table.Th>
                       <Table.Th>Destination IP</Table.Th>
-                      <Table.Th>Event Time</Table.Th>
-                      <Table.Th>Start Time</Table.Th>
-                      <Table.Th>End Time</Table.Th>
-                      <Table.Th>Created</Table.Th>
                       <Table.Th>Started</Table.Th>
                       <Table.Th>Completed</Table.Th>
                       <Table.Th>Result Size</Table.Th>
@@ -333,10 +346,6 @@ export function Dashboard() {
                         <Table.Td>{job.location}</Table.Td>
                         <Table.Td>{job.src_ip || '-'}</Table.Td>
                         <Table.Td>{job.dst_ip || '-'}</Table.Td>
-                        <Table.Td>{formatDateTime(job.event_time)}</Table.Td>
-                        <Table.Td>{formatDateTime(job.start_time)}</Table.Td>
-                        <Table.Td>{formatDateTime(job.end_time)}</Table.Td>
-                        <Table.Td>{formatDateTime(job.created_at)}</Table.Td>
                         <Table.Td>{formatDateTime(job.started_at)}</Table.Td>
                         <Table.Td>{formatDateTime(job.completed_at)}</Table.Td>
                         <Table.Td>{formatSize(job.result_size)}</Table.Td>
@@ -354,8 +363,13 @@ export function Dashboard() {
         <Modal
           opened={!!selectedJob}
           onClose={() => setSelectedJob(null)}
-          title={<Title order={3}>Job {selectedJob?.id} Tasks</Title>}
-          size="xl"
+          title={<Title order={3}>Job {selectedJob?.id} Details</Title>}
+          size="90%"
+          styles={{
+            body: {
+              minWidth: '1000px'  // Ensures a minimum width
+            }
+          }}
         >
           {selectedJob && (
             <Stack gap="md">
@@ -366,42 +380,95 @@ export function Dashboard() {
                 <Text size="sm">{selectedJob.description}</Text>
               </Group>
 
-              {selectedJob.tasks?.length ? (
-                <Table striped highlightOnHover>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Task ID</Table.Th>
-                      <Table.Th>Sensor</Table.Th>
-                      <Table.Th>Status</Table.Th>
-                      <Table.Th>Created</Table.Th>
-                      <Table.Th>Started</Table.Th>
-                      <Table.Th>Completed</Table.Th>
-                      <Table.Th>Size</Table.Th>
-                      <Table.Th>Message</Table.Th>
-                    </Table.Tr>
-                  </Table.Thead>
-                  <Table.Tbody>
-                    {selectedJob.tasks.map((task) => (
-                      <Table.Tr key={task.id}>
-                        <Table.Td>{task.task_id}</Table.Td>
-                        <Table.Td>{task.sensor}</Table.Td>
-                        <Table.Td>
-                          <Badge color={getStatusColor(task.status)}>
-                            {task.status}
-                          </Badge>
-                        </Table.Td>
-                        <Table.Td>{formatDateTime(task.created_at)}</Table.Td>
-                        <Table.Td>{formatDateTime(task.started_at)}</Table.Td>
-                        <Table.Td>{formatDateTime(task.completed_at)}</Table.Td>
-                        <Table.Td>{formatSize(task.pcap_size)}</Table.Td>
-                        <Table.Td>{task.result_message || '-'}</Table.Td>
+              {/* Job Details */}
+              <Paper withBorder p="md">
+                <Title order={4} mb="md">Job Information</Title>
+                <Grid>
+                  <Grid.Col span={6}>
+                    <Stack gap="xs">
+                      <Group>
+                        <Text fw={500}>Location:</Text>
+                        <Text>{selectedJob.location}</Text>
+                      </Group>
+                      <Group>
+                        <Text fw={500}>Source IP:</Text>
+                        <Text>{selectedJob.src_ip || '-'}</Text>
+                      </Group>
+                      <Group>
+                        <Text fw={500}>Destination IP:</Text>
+                        <Text>{selectedJob.dst_ip || '-'}</Text>
+                      </Group>
+                      <Group>
+                        <Text fw={500}>Event Time:</Text>
+                        <Text>{formatDateTime(selectedJob.event_time)}</Text>
+                      </Group>
+                    </Stack>
+                  </Grid.Col>
+                  <Grid.Col span={6}>
+                    <Stack gap="xs">
+                      <Group>
+                        <Text fw={500}>Start Time:</Text>
+                        <Text>{formatDateTime(selectedJob.start_time)}</Text>
+                      </Group>
+                      <Group>
+                        <Text fw={500}>End Time:</Text>
+                        <Text>{formatDateTime(selectedJob.end_time)}</Text>
+                      </Group>
+                      <Group>
+                        <Text fw={500}>Created:</Text>
+                        <Text>{formatDateTime(selectedJob.created_at)}</Text>
+                      </Group>
+                      <Group>
+                        <Text fw={500}>Result Size:</Text>
+                        <Text>{formatSize(selectedJob.result_size)}</Text>
+                      </Group>
+                    </Stack>
+                  </Grid.Col>
+                </Grid>
+              </Paper>
+
+              {/* Tasks List */}
+              <Paper withBorder p="md">
+                <Title order={4} mb="md">Tasks</Title>
+                {selectedJob.tasks?.length ? (
+                  <Table striped highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Task ID</Table.Th>
+                        <Table.Th>Sensor</Table.Th>
+                        <Table.Th>Status</Table.Th>
+                        <Table.Th>Created</Table.Th>
+                        <Table.Th>Started</Table.Th>
+                        <Table.Th>Completed</Table.Th>
+                        <Table.Th>Size</Table.Th>
+                        <Table.Th>Message</Table.Th>
                       </Table.Tr>
-                    ))}
-                  </Table.Tbody>
-                </Table>
-              ) : (
-                <Text c="dimmed">No tasks found for this job</Text>
-              )}
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {selectedJob.tasks.map((task) => (
+                        <Table.Tr key={task.id}>
+                          <Table.Td>{task.task_id}</Table.Td>
+                          <Table.Td>{task.sensor}</Table.Td>
+                          <Table.Td>
+                            <Badge color={getStatusColor(task.status)}>
+                              {task.status}
+                            </Badge>
+                          </Table.Td>
+                          <Table.Td>{formatDateTime(task.created_at)}</Table.Td>
+                          <Table.Td>{formatDateTime(task.started_at)}</Table.Td>
+                          <Table.Td>{formatDateTime(task.completed_at)}</Table.Td>
+                          <Table.Td>{formatSize(task.pcap_size)}</Table.Td>
+                          <Table.Td style={{ maxWidth: '400px' }}>
+                            {formatMessage(task.result_message)}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                ) : (
+                  <Text c="dimmed">No tasks found for this job</Text>
+                )}
+              </Paper>
             </Stack>
           )}
         </Modal>
