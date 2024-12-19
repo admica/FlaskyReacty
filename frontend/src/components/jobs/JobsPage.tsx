@@ -59,27 +59,25 @@ interface DebugMessage {
 
 export function JobsPage() {
     const [jobs, setJobs] = useState<Job[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [expandedJobIds, setExpandedJobIds] = useState<number[]>([]);
-    const navigate = useNavigate();
-    const modals = useModals();
-    const isAdmin = localStorage.getItem('isAdmin') === 'true';
-    const currentUser = localStorage.getItem('username');
-
-    // Filter states
     const [filters, setFilters] = useState({
         username: '',
         status: '',
         sensor: '',
-        description: '',
+        description: ''
     });
 
+    // Debug log state
     const [showDebug, setShowDebug] = useState(false);
     const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
     const messageIdCounter = useRef(0);
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    const navigate = useNavigate();
+    const modals = useModals();
 
     const addDebugMessage = (message: string) => {
         setDebugMessages(prev => {
@@ -105,74 +103,64 @@ export function JobsPage() {
         };
     }, []);
 
-    const canModifyJob = (job: Job) => {
-        return isAdmin || job.username === currentUser;
-    };
-
     const loadJobs = async () => {
+        setLoading(true);
+        setError(null);
         try {
             addDebugMessage('Fetching jobs...');
-            setLoading(true);
             const data = await apiService.getJobs();
+            addDebugMessage(`API Response: ${JSON.stringify(data)}`);
+            if (!data) {
+                throw new Error('No data returned from API');
+            }
             setJobs(data);
-            setError(null);
             addDebugMessage(`Successfully fetched ${data.length} jobs`);
         } catch (err: any) {
-            const errorMessage = err.error || 'Failed to load jobs';
+            const errorMessage = err.message || 'Failed to load jobs';
+            console.error('Job loading error:', err);
             setError(errorMessage);
             addDebugMessage(`Error loading jobs: ${errorMessage}`);
-            console.error('Error loading jobs:', err);
+            if (err.response) {
+                addDebugMessage(`Response status: ${err.response.status}`);
+                addDebugMessage(`Response data: ${JSON.stringify(err.response.data)}`);
+                addDebugMessage(`Request URL: ${err.response.config?.url}`);
+                addDebugMessage(`Request method: ${err.response.config?.method}`);
+                addDebugMessage(`Request headers: ${JSON.stringify(err.response.config?.headers)}`);
+            } else if (err.request) {
+                addDebugMessage('No response received from server');
+                addDebugMessage(`Request URL: ${err.request.url}`);
+                addDebugMessage(`Request method: ${err.request.method}`);
+            } else {
+                addDebugMessage('Error setting up request');
+            }
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        // Track if the component is mounted
-        let mounted = true;
-
-        const fetchJobs = async () => {
-            if (!mounted) return;
-            await loadJobs();
-        };
-
-        // Initial load
-        fetchJobs();
-
-        // Set up polling interval
-        const interval = setInterval(fetchJobs, 30000);
-
-        // Cleanup function
-        return () => {
-            mounted = false;
-            clearInterval(interval);
-        };
+        loadJobs();
     }, []);
 
     const handleCancelJob = async (jobId: number) => {
-        try {
-            addDebugMessage(`Cancelling job ${jobId}...`);
-            await apiService.cancelJob(jobId);
-            addDebugMessage(`Successfully cancelled job ${jobId}`);
-            await loadJobs();
-        } catch (err: any) {
-            const errorMessage = err.error || 'Failed to cancel job';
-            setError(errorMessage);
-            addDebugMessage(`Error cancelling job ${jobId}: ${errorMessage}`);
-        }
-    };
-
-    const handleCancelTask = async (jobId: number, sensor: string) => {
-        try {
-            addDebugMessage(`Cancelling task for job ${jobId} on sensor ${sensor}...`);
-            await apiService.cancelTask(jobId, sensor);
-            addDebugMessage(`Successfully cancelled task for job ${jobId} on sensor ${sensor}`);
-            await loadJobs();
-        } catch (err: any) {
-            const errorMessage = err.error || 'Failed to cancel task';
-            setError(errorMessage);
-            addDebugMessage(`Error cancelling task: ${errorMessage}`);
-        }
+        modals.openConfirmModal({
+            title: <Title order={3}>Cancel Job</Title>,
+            children: (
+                <Text size="sm">
+                    Are you sure you want to cancel this job? This will stop all running tasks.
+                </Text>
+            ),
+            labels: { confirm: 'Cancel Job', cancel: 'Keep Running' },
+            confirmProps: { color: 'red' },
+            onConfirm: async () => {
+                try {
+                    await apiService.cancelJob(jobId);
+                    await loadJobs();
+                } catch (err: any) {
+                    setError(err.message || 'Failed to cancel job');
+                }
+            },
+        });
     };
 
     const handleDeleteJob = async (jobId: number) => {
@@ -180,7 +168,7 @@ export function JobsPage() {
             title: <Title order={3}>Delete Job</Title>,
             children: (
                 <Text size="sm">
-                    Are you sure you want to delete this job and all its tasks? This action cannot be undone.
+                    Are you sure you want to delete this job? This action cannot be undone.
                 </Text>
             ),
             labels: { confirm: 'Delete Job', cancel: 'Cancel' },
@@ -190,7 +178,28 @@ export function JobsPage() {
                     await apiService.deleteJob(jobId);
                     await loadJobs();
                 } catch (err: any) {
-                    setError(err.error || 'Failed to delete job');
+                    setError(err.message || 'Failed to delete job');
+                }
+            },
+        });
+    };
+
+    const handleCancelTask = async (jobId: number, sensor: string) => {
+        modals.openConfirmModal({
+            title: <Title order={3}>Cancel Task</Title>,
+            children: (
+                <Text size="sm">
+                    Are you sure you want to cancel this task?
+                </Text>
+            ),
+            labels: { confirm: 'Cancel Task', cancel: 'Keep Running' },
+            confirmProps: { color: 'red' },
+            onConfirm: async () => {
+                try {
+                    await apiService.cancelTask(jobId, sensor);
+                    await loadJobs();
+                } catch (err: any) {
+                    setError(err.message || 'Failed to cancel task');
                 }
             },
         });
@@ -211,7 +220,7 @@ export function JobsPage() {
                     await apiService.deleteTask(jobId, sensor);
                     await loadJobs();
                 } catch (err: any) {
-                    setError(err.error || 'Failed to delete task');
+                    setError(err.message || 'Failed to delete task');
                 }
             },
         });
@@ -237,6 +246,7 @@ export function JobsPage() {
             'Failed': 'red',
             'Incomplete': 'red',
             'Retrieving': 'cyan',
+            'Merging': 'violet'
         };
         return colors[status] || 'gray';
     };
@@ -249,29 +259,23 @@ export function JobsPage() {
         );
     };
 
-    // Filter jobs based on current filters
+    // Add filtering and sorting options
+    const handleFilterChange = (field: string, value: string) => {
+        setFilters(prev => ({ ...prev, [field]: value }));
+    };
+
     const filteredJobs = jobs.filter(job => {
         return (
-            (!filters.username || job.username.toLowerCase().includes(filters.username.toLowerCase())) &&
+            (!filters.username || job.submitted_by.toLowerCase().includes(filters.username.toLowerCase())) &&
             (!filters.status || job.status === filters.status) &&
             (!filters.sensor || job.tasks.some(task => task.sensor.toLowerCase().includes(filters.sensor.toLowerCase()))) &&
             (!filters.description || job.description.toLowerCase().includes(filters.description.toLowerCase()))
         );
     });
 
-    // Calculate pagination
+    // Implement pagination
+    const paginatedJobs = filteredJobs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
     const totalPages = Math.ceil(filteredJobs.length / ITEMS_PER_PAGE);
-    const paginatedJobs = filteredJobs.slice(
-        (currentPage - 1) * ITEMS_PER_PAGE,
-        currentPage * ITEMS_PER_PAGE
-    );
-
-    const formatBytes = (bytes: string) => {
-        if (!bytes) return '-';
-        return bytes.replace(/(\d+)([KMGT]?B)/, (_, num, unit) => {
-            return `${Number(num).toLocaleString()} ${unit}`;
-        });
-    };
 
     const renderTaskRow = (task: Task, jobId: number) => (
         <Table.Tr key={`${jobId}-${task.sensor}`} style={{ backgroundColor: 'rgba(0,0,0,0.03)' }}>
@@ -281,10 +285,17 @@ export function JobsPage() {
                     <Badge color={getStatusColor(task.status)}>{task.status}</Badge>
                 </Group>
             </Table.Td>
-            <Table.Td>{task.result || '-'}</Table.Td>
-            <Table.Td colSpan={2}>{task.filename || '-'}</Table.Td>
-            <Table.Td>{task.completed || '-'}</Table.Td>
-            <Table.Td>{task.analysis || '-'}</Table.Td>
+            <Table.Td>{task.result_message || '-'}</Table.Td>
+            <Table.Td>{task.pcap_size || '-'}</Table.Td>
+            <Table.Td>{task.temp_path || '-'}</Table.Td>
+            <Table.Td>
+                {task.started_at && (
+                    <Text size="sm">Started: {new Date(task.started_at).toLocaleString()}</Text>
+                )}
+                {task.completed_at && (
+                    <Text size="sm">Completed: {new Date(task.completed_at).toLocaleString()}</Text>
+                )}
+            </Table.Td>
             <Table.Td>
                 <Group>
                     {task.status === 'Running' && (
@@ -292,13 +303,12 @@ export function JobsPage() {
                             <ActionIcon 
                                 color="red" 
                                 onClick={() => handleCancelTask(jobId, task.sensor)}
-                                disabled={!canModifyJob(job)}
                             >
                                 <IconPlayerStop size={16} />
                             </ActionIcon>
                         </Tooltip>
                     )}
-                    {task.status === 'Complete' && task.analysis && (
+                    {task.status === 'Complete' && (
                         <Tooltip label="View Analysis">
                             <ActionIcon 
                                 color="blue" 
@@ -312,7 +322,6 @@ export function JobsPage() {
                         <ActionIcon 
                             color="red" 
                             onClick={() => handleDeleteTask(jobId, task.sensor)}
-                            disabled={!canModifyJob(job)}
                         >
                             <IconTrash size={16} />
                         </ActionIcon>
@@ -346,147 +355,114 @@ export function JobsPage() {
 
                 <Paper withBorder p="md" mb="md">
                     <Grid>
-                        <Grid.Col span={3}>
+                        <Grid.Col span={6}>
                             <TextInput
                                 placeholder="Filter by username"
                                 value={filters.username}
-                                onChange={(e) => setFilters(f => ({ ...f, username: e.target.value }))}
-                                leftSection={<IconSearch size={16} />}
+                                onChange={(event) => handleFilterChange('username', event.currentTarget.value)}
+                                icon={<IconSearch size={16} />}
                             />
                         </Grid.Col>
-                        <Grid.Col span={3}>
+                        <Grid.Col span={6}>
                             <Select
                                 placeholder="Filter by status"
-                                value={filters.status}
-                                onChange={(value) => setFilters(f => ({ ...f, status: value || '' }))}
                                 data={STATUS_OPTIONS}
-                                clearable
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={3}>
-                            <TextInput
-                                placeholder="Filter by sensor"
-                                value={filters.sensor}
-                                onChange={(e) => setFilters(f => ({ ...f, sensor: e.target.value }))}
-                                leftSection={<IconSearch size={16} />}
-                            />
-                        </Grid.Col>
-                        <Grid.Col span={3}>
-                            <TextInput
-                                placeholder="Filter by description"
-                                value={filters.description}
-                                onChange={(e) => setFilters(f => ({ ...f, description: e.target.value }))}
-                                leftSection={<IconSearch size={16} />}
+                                value={filters.status}
+                                onChange={(value) => handleFilterChange('status', value || '')}
                             />
                         </Grid.Col>
                     </Grid>
                 </Paper>
 
-                <Paper withBorder>
-                    <Box style={{ overflowX: 'auto' }}>
-                        <Table striped highlightOnHover>
-                            <Table.Thead>
-                                <Table.Tr>
-                                    <Table.Th></Table.Th>
-                                    <Table.Th>ID</Table.Th>
-                                    <Table.Th>Status</Table.Th>
-                                    <Table.Th>Description</Table.Th>
-                                    <Table.Th>Time Range</Table.Th>
-                                    <Table.Th>Source IP</Table.Th>
-                                    <Table.Th>Dest IP</Table.Th>
-                                    <Table.Th>Actions</Table.Th>
-                                </Table.Tr>
-                            </Table.Thead>
-                            <Table.Tbody>
-                                {paginatedJobs.map((job) => (
-                                    <>
-                                        <Table.Tr key={job.id}>
-                                            <Table.Td>
-                                                <ActionIcon
-                                                    onClick={() => toggleJobExpanded(job.id)}
-                                                    variant="subtle"
-                                                >
-                                                    {expandedJobIds.includes(job.id) ? 
-                                                        <IconChevronDown size={16} /> : 
-                                                        <IconChevronRight size={16} />
-                                                    }
-                                                </ActionIcon>
-                                            </Table.Td>
-                                            <Table.Td>{job.id}</Table.Td>
-                                            <Table.Td>
-                                                <Badge color={getStatusColor(job.status)}>
-                                                    {job.status}
-                                                </Badge>
-                                            </Table.Td>
-                                            <Table.Td>{job.description}</Table.Td>
-                                            <Table.Td>
-                                                {new Date(job.start_time).toLocaleString()} -<br/>
-                                                {new Date(job.end_time).toLocaleString()}
-                                            </Table.Td>
-                                            <Table.Td>{job.src_ip}</Table.Td>
-                                            <Table.Td>{job.dst_ip}</Table.Td>
-                                            <Table.Td>
-                                                <Group>
-                                                    {job.status === 'Running' && (
-                                                        <Tooltip label="Cancel Job">
-                                                            <ActionIcon 
-                                                                color="red" 
-                                                                onClick={() => handleCancelJob(job.id)}
-                                                                disabled={!canModifyJob(job)}
-                                                            >
-                                                                <IconPlayerStop size={16} />
-                                                            </ActionIcon>
-                                                        </Tooltip>
-                                                    )}
-                                                    <Tooltip label="Run Similar Job">
-                                                        <ActionIcon 
-                                                            color="blue" 
-                                                            onClick={() => handleRunSimilar(job)}
+                <ScrollArea>
+                    <Table striped highlightOnHover>
+                        <Table.Thead>
+                            <Table.Tr>
+                                <Table.Th>ID</Table.Th>
+                                <Table.Th>Status</Table.Th>
+                                <Table.Th>Description</Table.Th>
+                                <Table.Th>Time Range</Table.Th>
+                                <Table.Th>Source IP</Table.Th>
+                                <Table.Th>Destination IP</Table.Th>
+                                <Table.Th>Actions</Table.Th>
+                            </Table.Tr>
+                        </Table.Thead>
+                        <Table.Tbody>
+                            {paginatedJobs.map((job) => (
+                                <React.Fragment key={job.id}>
+                                    <Table.Tr>
+                                        <Table.Td>{job.id}</Table.Td>
+                                        <Table.Td>
+                                            <Badge color={getStatusColor(job.status)}>{job.status}</Badge>
+                                        </Table.Td>
+                                        <Table.Td>{job.description}</Table.Td>
+                                        <Table.Td>
+                                            {job.start_time && job.end_time && (
+                                                <>
+                                                    {new Date(job.start_time).toLocaleString()} -<br/>
+                                                    {new Date(job.end_time).toLocaleString()}
+                                                </>
+                                            )}
+                                        </Table.Td>
+                                        <Table.Td>{job.src_ip}</Table.Td>
+                                        <Table.Td>{job.dst_ip}</Table.Td>
+                                        <Table.Td>
+                                            <Group>
+                                                {job.status === 'Running' && (
+                                                    <Tooltip label="Cancel Job">
+                                                        <ActionIcon
+                                                            color="red"
+                                                            onClick={() => handleCancelJob(job.id)}
                                                         >
-                                                            <IconPlayerPlay size={16} />
+                                                            <IconPlayerStop size={16} />
                                                         </ActionIcon>
                                                     </Tooltip>
-                                                    {job.status === 'Complete' && (
-                                                        <Tooltip label="View Combined Analysis">
-                                                            <ActionIcon 
-                                                                color="blue" 
-                                                                onClick={() => handleViewAnalysis(job.id)}
-                                                            >
-                                                                <IconFileAnalytics size={16} />
-                                                            </ActionIcon>
-                                                        </Tooltip>
-                                                    )}
-                                                    <Tooltip label="Delete Job">
-                                                        <ActionIcon 
-                                                            color="red" 
-                                                            onClick={() => handleDeleteJob(job.id)}
-                                                            disabled={!canModifyJob(job)}
-                                                        >
-                                                            <IconTrash size={16} />
-                                                        </ActionIcon>
-                                                    </Tooltip>
-                                                </Group>
-                                            </Table.Td>
-                                        </Table.Tr>
-                                        {expandedJobIds.includes(job.id) && job.tasks.map(task => 
-                                            renderTaskRow(task, job.id)
-                                        )}
-                                    </>
-                                ))}
-                            </Table.Tbody>
-                        </Table>
-                    </Box>
+                                                )}
+                                                <Tooltip label="Run Similar Job">
+                                                    <ActionIcon
+                                                        color="blue"
+                                                        onClick={() => handleRunSimilar(job)}
+                                                    >
+                                                        <IconPlayerPlay size={16} />
+                                                    </ActionIcon>
+                                                </Tooltip>
+                                                <Tooltip label="Delete Job">
+                                                    <ActionIcon
+                                                        color="red"
+                                                        onClick={() => handleDeleteJob(job.id)}
+                                                    >
+                                                        <IconTrash size={16} />
+                                                    </ActionIcon>
+                                                </Tooltip>
+                                            </Group>
+                                        </Table.Td>
+                                    </Table.Tr>
+                                    {expandedJobIds.includes(job.id) && (
+                                        <>
+                                            <Table.Tr style={{ backgroundColor: 'rgba(0,0,0,0.02)' }}>
+                                                <Table.Td colSpan={2} />
+                                                <Table.Td colSpan={6}>
+                                                    <Text fw={500} mb="xs">Tasks</Text>
+                                                </Table.Td>
+                                            </Table.Tr>
+                                            {job.tasks.map(task => renderTaskRow(task, job.id))}
+                                        </>
+                                    )}
+                                </React.Fragment>
+                            ))}
+                        </Table.Tbody>
+                    </Table>
+                </ScrollArea>
 
-                    {totalPages > 1 && (
-                        <Group justify="center" mt="md">
-                            <Pagination
-                                total={totalPages}
-                                value={currentPage}
-                                onChange={setCurrentPage}
-                            />
-                        </Group>
-                    )}
-                </Paper>
+                {totalPages > 1 && (
+                    <Group position="center" mt="md">
+                        <Pagination
+                            total={totalPages}
+                            value={currentPage}
+                            onChange={setCurrentPage}
+                        />
+                    </Group>
+                )}
             </Paper>
 
             <Box

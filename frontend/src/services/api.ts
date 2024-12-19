@@ -45,16 +45,24 @@ export interface SensorSummary {
 
 export interface Task {
     id: number;
+    job_id: number;
+    task_id: string;
     sensor: string;
     status: string;
-    started: string | null;
-    completed: string | null;
-    result_message?: string;
+    pcap_size: string | null;
+    temp_path: string | null;
+    result_message: string | null;
+    start_time: string | null;
+    end_time: string | null;
+    created_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
 }
 
 export interface Job {
     id: number;
     username: string;
+    status: string;
     description: string;
     location: string;
     src_ip: string | null;
@@ -62,14 +70,22 @@ export interface Job {
     event_time: string | null;
     start_time: string;
     end_time: string;
-    status: string;
     started: string | null;
     completed: string | null;
     result: string | null;
     filename: string | null;
     analysis: string | null;
     tz: string;
+    result_size: string | null;
+    result_path: string | null;
+    created_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
     tasks: Task[];
+}
+
+export interface JobsResponse {
+    jobs: Job[];
 }
 
 export interface SystemStatus {
@@ -282,8 +298,8 @@ const apiService = {
 
     getJobs: async (params?: { username?: string }): Promise<Job[]> => {
         try {
-            const response = await api.get('/jobs', { params });
-            return response.data;
+            const response = await api.get<JobsResponse>('/jobs', { params });
+            return response.data.jobs;
         } catch (error: any) {
             throw logApiError('Error fetching jobs', error);
         }
