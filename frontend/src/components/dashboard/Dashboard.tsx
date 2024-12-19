@@ -119,9 +119,9 @@ export function Dashboard() {
           description: formData.description || undefined,
           src_ip: formData.src_ip || undefined,
           dst_ip: formData.dst_ip || undefined,
-          event_time: formData.event_time ? formData.event_time.toISOString() + "Z" : undefined,
-          start_time: formData.start_time ? formData.start_time.toISOString() + "Z" : undefined,
-          end_time: formData.end_time ? formData.end_time.toISOString() + "Z" : undefined,
+          event_time: formData.event_time ? formData.event_time.toISOString() : undefined,
+          start_time: formData.start_time ? formData.start_time.toISOString() : undefined,
+          end_time: formData.end_time ? formData.end_time.toISOString() : undefined,
           tz: formData.timezone
         }
       };
