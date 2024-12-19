@@ -481,7 +481,7 @@ export function AdminPage() {
             </Group>
 
             <Grid>
-              <Grid.Col span={4}>
+              <Grid.Col span={3}>
                 <ScrollArea h={400} scrollbarSize={8}>
                   <Stack gap={0}>
                     {logs.map((log) => (
@@ -508,7 +508,7 @@ export function AdminPage() {
                   </Stack>
                 </ScrollArea>
               </Grid.Col>
-              <Grid.Col span={8}>
+              <Grid.Col span={9}>
                 {selectedLog ? (
                   <LogViewer 
                     logFile={selectedLog} 
