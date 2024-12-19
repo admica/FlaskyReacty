@@ -362,7 +362,7 @@ export function SensorsPage() {
   }
 
   return (
-    <Box style={{ position: 'relative', minHeight: '100vh' }}>
+    <Box p="md" style={{ position: 'relative', minHeight: '100vh' }}>
       <Group justify="space-between" mb="md">
         <Title order={2}>Sensors</Title>
       </Group>
