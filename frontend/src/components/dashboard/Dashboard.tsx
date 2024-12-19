@@ -18,6 +18,7 @@ import {
   Grid,
   Modal,
   ScrollArea,
+  Box,
 } from '@mantine/core';
 import { DateTimePicker } from '@mantine/dates';
 import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
@@ -171,7 +172,7 @@ export function Dashboard() {
   };
 
   return (
-    <Container size="xl">
+    <Box p="md">
       <Stack gap="md">
         <Group justify="space-between" align="center">
           <Title order={2}>Dashboard</Title>
@@ -405,6 +406,6 @@ export function Dashboard() {
           )}
         </Modal>
       </Stack>
-    </Container>
+    </Box>
   );
 } 

@@ -109,7 +109,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AppShell
-      navbar={{ width: 300, breakpoint: 'sm' }}
+      navbar={{ width: 205, breakpoint: 'sm' }}
     >
       <AppShell.Navbar p="md">
         <Stack gap="xs" h="100%">
