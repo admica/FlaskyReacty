@@ -2,6 +2,7 @@
 Test suite for admin user management endpoints
 """
 from tests.base import BaseTest, TestResult
+import json
 
 class AdminUserTest(BaseTest):
     """Test suite for admin user management"""
@@ -9,17 +10,35 @@ class AdminUserTest(BaseTest):
     def __init__(self, base_url: str):
         super().__init__(base_url)
         self.access_token = None
-        self.test_admin = "amcarr2"  # The admin user we'll try to add
+        self.admin_to_add = "testadmin123"  # The admin user we'll try to add
+        
+        # Get test account credentials from config
+        if not self.config.getboolean('TEST_MODE', 'allow_test_login', fallback=False):
+            raise Exception("Test mode is not enabled (allow_test_login must be true)")
+            
+        test_users = self.config.items('TEST_USERS')
+        for _, user_json in test_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('username') == 'test_user':
+                    self.user_pass = user_data.get('password')
+                elif user_data.get('username') == 'test_admin':
+                    self.admin_pass = user_data.get('password')
+            except json.JSONDecodeError:
+                continue
+                
+        if not hasattr(self, 'admin_pass') or not hasattr(self, 'user_pass'):
+            raise Exception("Could not find test accounts in TEST_USERS section")
     
     def test_01_add_admin_as_regular_user(self):
         """Test adding admin user without admin privileges"""
-        # Login as regular user
+        # Login as test user
         login_response = self.request(
             "POST",
             "/api/v1/login",
             data={
-                "username": "user", # Regular user from config.ini
-                "password": "user"  # Default password from config.ini
+                "username": "test_user",
+                "password": self.user_pass
             },
             auth=False
         )
@@ -39,7 +58,7 @@ class AdminUserTest(BaseTest):
         add_response = self.request(
             "POST",
             "/api/v1/admin/users",
-            data={"username": self.test_admin},
+            data={"username": self.admin_to_add},
             auth=True,
             auth_token=self.access_token,
             expected_status=403
@@ -68,8 +87,8 @@ class AdminUserTest(BaseTest):
             "POST",
             "/api/v1/login",
             data={
-                "username": self.config.get('TEST_USER', 'username'),
-                "password": self.config.get('TEST_USER', 'password')
+                "username": "test_admin",
+                "password": self.admin_pass
             },
             auth=False
         )
@@ -89,7 +108,7 @@ class AdminUserTest(BaseTest):
         add_response = self.request(
             "POST",
             "/api/v1/admin/users",
-            data={"username": self.test_admin},
+            data={"username": self.admin_to_add},
             auth=True,
             auth_token=self.access_token,
             expected_status=201
@@ -116,7 +135,7 @@ class AdminUserTest(BaseTest):
         # Get admin user details
         get_response = self.request(
             "GET",
-            f"/api/v1/admin/users/{self.test_admin}",
+            f"/api/v1/admin/users/{self.admin_to_add}",
             auth=True,
             auth_token=self.access_token
         )
@@ -125,7 +144,7 @@ class AdminUserTest(BaseTest):
         if get_response['success']:
             admin = get_response['response']
             # Verify the admin user exists and has expected fields
-            if admin and admin.get('username') == self.test_admin:
+            if admin and admin.get('username') == self.admin_to_add:
                 success = True
         
         self.add_result(TestResult(
@@ -149,7 +168,7 @@ class AdminUserTest(BaseTest):
         # Remove admin user
         remove_response = self.request(
             "DELETE",
-            f"/api/v1/admin/users/{self.test_admin}",
+            f"/api/v1/admin/users/{self.admin_to_add}",
             auth=True,
             auth_token=self.access_token
         )
@@ -164,7 +183,7 @@ class AdminUserTest(BaseTest):
         # Verify user was removed
         verify_response = self.request(
             "GET",
-            f"/api/v1/admin/users/{self.test_admin}",
+            f"/api/v1/admin/users/{self.admin_to_add}",
             auth=True,
             auth_token=self.access_token,
             expected_status=404
@@ -185,4 +204,4 @@ class AdminUserTest(BaseTest):
                 "/api/v1/logout",
                 auth=True,
                 auth_token=self.access_token
-            ) 
+            )

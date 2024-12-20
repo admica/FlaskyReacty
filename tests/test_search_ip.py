@@ -13,17 +13,38 @@ class IPSearchTest(BaseTest):
     def __init__(self, base_url: str):
         super().__init__(base_url)
         self.access_token = None
-        self.test_ip = None  # Will be set in setup after getting a real IP
+        self.target_ip = None  # Will be set in setup after getting a real IP
     
     def setup(self):
         """Setup test environment - login and get token"""
-        # Login with regular user from config.ini
+        # Get test_user credentials from config.ini
+        test_user = None
+        local_users = self.config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('username') == 'test_user':
+                    test_user = user_data
+                    break
+            except json.JSONDecodeError:
+                continue
+                
+        if not test_user:
+            self.add_result(TestResult(
+                "Get test user credentials",
+                False,
+                None,
+                "test_user not found in config.ini"
+            ))
+            return False
+            
+        # Login with test_user credentials
         login_response = self.request(
             "POST",
             "/api/v1/login",
             data={
-                "username": "user",  # Regular user from config.ini
-                "password": "user"   # Default password from config.ini
+                "username": test_user['username'],
+                "password": test_user['password']
             },
             auth=False
         )
@@ -81,7 +102,7 @@ class IPSearchTest(BaseTest):
         base_ip = subnet.split('/')[0]  # Get the network portion
         ip_parts = base_ip.split('.')
         ip_parts[-1] = "100"  # Use .100 in the last octet
-        self.test_ip = ".".join(ip_parts)
+        self.target_ip = ".".join(ip_parts)
         
         return True
     
@@ -91,7 +112,7 @@ class IPSearchTest(BaseTest):
             "POST",
             "/api/v1/search/ip",
             data={
-                "src_ip": self.test_ip
+                "src_ip": self.target_ip
             },
             auth=True,
             auth_token=self.access_token
@@ -127,7 +148,7 @@ class IPSearchTest(BaseTest):
             "POST",
             "/api/v1/search/ip",
             data={
-                "src_ip": self.test_ip,
+                "src_ip": self.target_ip,
                 "start_time": start_time,
                 "end_time": end_time
             },
@@ -180,7 +201,7 @@ class IPSearchTest(BaseTest):
             "POST",
             "/api/v1/search/ip",
             data={
-                "src_ip": self.test_ip,
+                "src_ip": self.target_ip,
                 "start_time": "invalid-time",
                 "end_time": "2024-12-31T23:59:59Z"
             },
@@ -202,7 +223,7 @@ class IPSearchTest(BaseTest):
             "POST",
             "/api/v1/search/ip",
             data={
-                "src_ip": self.test_ip
+                "src_ip": self.target_ip
             },
             auth=False,
             expected_status=401

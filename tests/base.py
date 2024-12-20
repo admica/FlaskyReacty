@@ -40,9 +40,13 @@ class BaseTest:
         config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.ini')
         self.config.read(config_path)
         
-        # Get local user credentials
-        local_users = self.config.items('LOCAL_USERS')
-        for _, user_json in local_users:
+        # Verify test mode is enabled
+        if not self.config.getboolean('TEST_MODE', 'allow_test_login', fallback=False):
+            raise Exception("Test mode is not enabled (allow_test_login must be true)")
+        
+        # Get test user credentials
+        test_users = self.config.items('TEST_USERS')
+        for _, user_json in test_users:
             try:
                 user_data = json.loads(user_json)
                 if user_data.get('role') == 'user':
@@ -53,7 +57,7 @@ class BaseTest:
                 continue
         
         if not hasattr(self, 'auth_username') or not hasattr(self, 'auth_password'):
-            raise Exception("No local user found in config")
+            raise Exception("No test user found in config")
     
     def add_result(self, result: TestResult) -> None:
         """Add a test result"""
@@ -61,10 +65,10 @@ class BaseTest:
     
     def request(self, method: str, endpoint: str, data: Dict = None,
                 expected_status: int = 200, auth: bool = True,
-                auth_token: Optional[str] = None) -> Dict[str, Any]:
+                auth_token: Optional[str] = None, use_json: bool = True) -> Dict[str, Any]:
         """Make an API request"""
         url = f"{self.base_url}{endpoint}"
-        headers = {'Content-Type': 'application/json'}
+        headers = {'Content-Type': 'application/json' if use_json else 'application/x-www-form-urlencoded'}
         
         if auth and auth_token:
             headers['Authorization'] = f'Bearer {auth_token}'
@@ -74,7 +78,8 @@ class BaseTest:
                 method,
                 url,
                 headers=headers,
-                json=data,
+                json=data if use_json else None,
+                data=data if not use_json else None,
                 timeout=10
             )
             

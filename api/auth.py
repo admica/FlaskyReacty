@@ -38,16 +38,6 @@ def ldap_authenticate(username, password):
     """Authenticate user against LDAP server"""
     logger.debug(f"Attempting LDAP authentication for user: {username}")
 
-    # Check test user credentials
-    try:
-        test_username = config.get('TEST_USER', 'username')
-        test_password = config.get('TEST_USER', 'password')
-        if username == test_username and password == test_password:
-            logger.debug("Test user authentication successful")
-            return True
-    except:
-        pass
-
     LDAP_SERVERS = [value for name, value in config.items('LDAP_SERVERS')]
     LDAP_PORT = config.getint('AUTH', 'ldap_port')
     LDAP_BIND_DN = str(config.get('AUTH', 'ldap_bind_dn'))
@@ -93,13 +83,19 @@ def ldap_authenticate(username, password):
 def get_user_role(username):
     """Get user role from config or database"""
     try:
-        # Check test user first
-        test_username = config.get('TEST_USER', 'username')
-        test_role = config.get('TEST_USER', 'role', fallback='admin')
-
-        if username == test_username:
-            logger.debug(f"Test user {username} assigned role: {test_role}")
-            return test_role
+        # Check test users first if test mode is enabled
+        if config.getboolean('TEST_MODE', 'allow_test_login', fallback=False):
+            test_users = config.items('TEST_USERS')
+            for _, user_json in test_users:
+                try:
+                    user_data = json.loads(user_json)
+                    if username == user_data.get('username'):
+                        role = user_data.get('role', 'user')
+                        logger.debug(f"Test user {username} assigned role: {role}")
+                        return role
+                except json.JSONDecodeError:
+                    logger.error(f"Invalid JSON in TEST_USERS config")
+                    continue
 
         # Check if user is a local user
         local_users = config.items('LOCAL_USERS')
@@ -261,7 +257,40 @@ def login():
         if not username or not password:
             return jsonify({"error": "Username and password required"}), 400
 
-        # First try local user authentication
+        # First check test users if test mode is enabled
+        if config.getboolean('TEST_MODE', 'allow_test_login', fallback=False):
+            try:
+                test_users = config.items('TEST_USERS')
+                for _, user_json in test_users:
+                    try:
+                        user_data = json.loads(user_json)
+                        if username == user_data.get('username') and password == user_data.get('password'):
+                            logger.info(f"Test user authentication successful: {username}")
+                            role = user_data.get('role', 'user')
+                            # Create tokens and session
+                            access_token = create_access_token(
+                                identity=username,
+                                additional_claims={'role': role}
+                            )
+                            refresh_token = create_refresh_token(identity=username)
+                            session_token = create_user_session(username)
+
+                            if not session_token:
+                                return jsonify({"error": "Failed to create session"}), 500
+
+                            return jsonify({
+                                'access_token': access_token,
+                                'refresh_token': refresh_token,
+                                'session_token': session_token,
+                                'role': role
+                            }), 200
+                    except json.JSONDecodeError:
+                        logger.error(f"Invalid JSON in TEST_USERS config")
+                        continue
+            except Exception as e:
+                logger.warning(f"Error checking test users: {e}")
+
+        # Then try local user authentication
         local_users = config.items('LOCAL_USERS')
         for local_username, user_json in local_users:
             try:
