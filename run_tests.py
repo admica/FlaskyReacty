@@ -115,7 +115,13 @@ class TestRunner:
                         try:
                             method()
                         except Exception as e:
-                            console.print(f"[red]Test {method_name} failed: {str(e)}[/red]")
+                            # Add error to results instead of printing
+                            test_instance.add_result(TestResult(
+                                method_name,
+                                False,
+                                None,
+                                str(e)
+                            ))
                 
                 # Run teardown if it exists
                 if hasattr(test_instance, 'teardown'):
@@ -172,25 +178,6 @@ class TestRunner:
         total = len(self.results)
         success_rate = (success_count / total * 100) if total > 0 else 0
         console.print(f"\nSuccess Rate: {success_rate:.1f}% ({success_count}/{total})")
-
-        # Print failed test details with truncated output
-        failed_tests = [r for r in self.results if not r.success]
-        if failed_tests:
-            console.print("\n[bold red]Failed Tests Details:[/bold red]")
-            for test in failed_tests:
-                console.print(f"\n[bold]{test.name}[/bold]")
-                if test.error:
-                    console.print(f"Error: {self.truncate_text(str(test.error))}")
-                if test.response:
-                    console.print("Response:")
-                    try:
-                        if isinstance(test.response, dict):
-                            response_str = str(test.response)
-                            console.print(self.truncate_text(response_str))
-                        else:
-                            console.print(self.truncate_text(str(test.response)))
-                    except:
-                        console.print("Unable to format response")
 
 def main():
     """Main entry point"""

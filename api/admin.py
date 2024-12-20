@@ -375,6 +375,51 @@ def add_admin_user():
         logger.error(f"Error adding admin user: {e}")
         return jsonify({"error": "Failed to add admin user"}), 500
 
+@admin_bp.route('/api/v1/admin/users/<username>', methods=['GET'])
+@admin_required()
+@rate_limit()
+def get_admin_user(username):
+    """Get details of a specific admin user"""
+    try:
+        username = username.strip().lower()
+        
+        # Check local admins first
+        local_users = config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('username') == username and user_data.get('role') == 'admin':
+                    return jsonify({
+                        'username': username,
+                        'type': 'local',
+                        'created_at': None,  # Local users don't have creation date
+                        'last_active': None  # Local users don't track activity
+                    }), 200
+            except json.JSONDecodeError:
+                continue
+        
+        # Check database for LDAP admin users
+        rows = db("""
+            SELECT username, added_date, added_by
+            FROM admin_users
+            WHERE username = %s
+        """, [username])
+        
+        if not rows:
+            return jsonify({"error": "Admin user not found"}), 404
+            
+        row = rows[0]
+        return jsonify({
+            'username': row[0],
+            'type': 'ldap',
+            'created_at': row[1].isoformat() if row[1] else None,
+            'added_by': row[2]
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting admin user details: {e}")
+        return jsonify({"error": "Failed to get admin user details"}), 500
+
 @admin_bp.route('/api/v1/admin/users/<username>', methods=['DELETE'])
 @admin_required()
 @rate_limit()
@@ -397,17 +442,17 @@ def remove_admin_user(username):
                     return jsonify({"error": "Cannot remove admin privileges from local admin users"}), 403
             except json.JSONDecodeError:
                 continue
-
-        # Remove user from admin_users table
+                
+        # Remove from admin_users table
         result = db("""
             DELETE FROM admin_users
             WHERE username = %s
             RETURNING username
         """, [username])
-
+        
         if not result:
             return jsonify({"error": "Admin user not found"}), 404
-
+            
         logger.info(f"Removed admin privileges from user: {username} (by {current_user})")
         return jsonify({"message": "Admin privileges removed successfully"}), 200
 

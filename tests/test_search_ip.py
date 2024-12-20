@@ -19,8 +19,8 @@ class IPSearchTest(BaseTest):
         """Setup test environment - login and get token"""
         # Get test_user credentials from config.ini
         test_user = None
-        local_users = self.config.items('LOCAL_USERS')
-        for _, user_json in local_users:
+        test_users = self.config.items('TEST_USERS')
+        for _, user_json in test_users:
             try:
                 user_data = json.loads(user_json)
                 if user_data.get('username') == 'test_user':
@@ -34,7 +34,7 @@ class IPSearchTest(BaseTest):
                 "Get test user credentials",
                 False,
                 None,
-                "test_user not found in config.ini"
+                "test_user not found in TEST_USERS section"
             ))
             return False
             
