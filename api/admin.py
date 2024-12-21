@@ -382,7 +382,7 @@ def get_admin_user(username):
     """Get details of a specific admin user"""
     try:
         username = username.strip().lower()
-        
+
         # Check local admins first
         local_users = config.items('LOCAL_USERS')
         for _, user_json in local_users:
@@ -397,17 +397,17 @@ def get_admin_user(username):
                     }), 200
             except json.JSONDecodeError:
                 continue
-        
+
         # Check database for LDAP admin users
         rows = db("""
             SELECT username, added_date, added_by
             FROM admin_users
             WHERE username = %s
         """, [username])
-        
+
         if not rows:
             return jsonify({"error": "Admin user not found"}), 404
-            
+
         row = rows[0]
         return jsonify({
             'username': row[0],
@@ -442,20 +442,82 @@ def remove_admin_user(username):
                     return jsonify({"error": "Cannot remove admin privileges from local admin users"}), 403
             except json.JSONDecodeError:
                 continue
-                
+
         # Remove from admin_users table
         result = db("""
             DELETE FROM admin_users
             WHERE username = %s
             RETURNING username
         """, [username])
-        
+
         if not result:
             return jsonify({"error": "Admin user not found"}), 404
-            
+
         logger.info(f"Removed admin privileges from user: {username} (by {current_user})")
         return jsonify({"message": "Admin privileges removed successfully"}), 200
 
     except Exception as e:
         logger.error(f"Error removing admin user: {e}")
         return jsonify({"error": "Failed to remove admin user"}), 500
+
+@admin_bp.route('/api/v1/admin/audit', methods=['GET'])
+@admin_required()
+@rate_limit()
+def get_admin_audit_log():
+    """Get admin user audit log"""
+    try:
+        # Get optional query parameters
+        username = request.args.get('username')
+        action = request.args.get('action')  # Should be 'ADD' or 'REMOVE'
+        days = request.args.get('days', type=int)
+        limit = request.args.get('limit', 100, type=int)  # Default to 100 entries
+
+        # Build query
+        query = """
+            SELECT id, action, username, changed_by, change_date
+            FROM admin_audit_log
+            WHERE 1=1
+        """
+        params = []
+
+        # Add filters if provided
+        if username:
+            query += " AND username = %s"
+            params.append(username)
+        if action:
+            query += " AND action = %s"
+            params.append(action.upper())  # Convert to uppercase to match DB
+        if days:
+            query += " AND change_date >= NOW() - INTERVAL '%s days'"
+            params.append(days)
+
+        # Add order and limit
+        query += " ORDER BY change_date DESC LIMIT %s"
+        params.append(limit)
+
+        # Execute query
+        rows = db(query, params)
+
+        # Format results
+        audit_logs = [{
+            'id': row[0],
+            'action': row[1],  # Will be 'ADD' or 'REMOVE'
+            'username': row[2],
+            'changed_by': row[3],
+            'change_date': row[4].isoformat() if row[4] else None
+        } for row in rows]
+
+        return jsonify({
+            'audit_logs': audit_logs,
+            'total': len(audit_logs),
+            'filters': {
+                'username': username,
+                'action': action,
+                'days': days,
+                'limit': limit
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting admin audit log: {e}")
+        return jsonify({"error": "Failed to get admin audit log"}), 500

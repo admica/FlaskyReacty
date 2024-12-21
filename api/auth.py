@@ -328,7 +328,7 @@ def login():
         if ldap_authenticate(username, password):
             # Get role from admin_users table for LDAP users
             role = get_user_role(username)
-            
+
             # Create tokens and session
             access_token = create_access_token(
                 identity=username,
