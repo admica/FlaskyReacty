@@ -1,15 +1,16 @@
 """
-Test suite for admin user management endpoints
+Test suite for admin user management and audit log functionality
 """
 from tests.base import BaseTest, TestResult
 import json
 
-class AdminUserTest(BaseTest):
-    """Test suite for admin user management"""
+class AdminTest(BaseTest):
+    """Test suite for admin user management and audit logging"""
     
     def __init__(self, base_url: str):
         super().__init__(base_url)
-        self.access_token = None
+        self.admin_token = None
+        self.user_token = None
         self.admin_to_add = "testadmin123"  # The admin user we'll try to add
         
         # Get test account credentials from config
@@ -30,10 +31,10 @@ class AdminUserTest(BaseTest):
         if not hasattr(self, 'admin_pass') or not hasattr(self, 'user_pass'):
             raise Exception("Could not find test accounts in TEST_USERS section")
     
-    def test_01_add_admin_as_regular_user(self):
-        """Test adding admin user without admin privileges"""
+    def setup(self):
+        """Setup test environment - login as both admin and regular user"""
         # Login as test user
-        login_response = self.request(
+        user_login = self.request(
             "POST",
             "/api/v1/login",
             data={
@@ -43,47 +44,19 @@ class AdminUserTest(BaseTest):
             auth=False
         )
         
-        if not login_response['success']:
+        if not user_login['success']:
             self.add_result(TestResult(
                 "Login as regular user",
                 False,
                 None,
                 "Failed to login as regular user"
             ))
-            return
+            return False
             
-        self.access_token = login_response['response']['access_token']
+        self.user_token = user_login['response']['access_token']
         
-        # Try to add admin user - should fail with 403
-        add_response = self.request(
-            "POST",
-            "/api/v1/admin/users",
-            data={"username": self.admin_to_add},
-            auth=True,
-            auth_token=self.access_token,
-            expected_status=403
-        )
-        
-        self.add_result(TestResult(
-            "Add admin user without privileges",
-            add_response['success'],
-            add_response['response'],
-            add_response.get('error')
-        ))
-        
-        # Logout
-        self.request(
-            "POST",
-            "/api/v1/logout",
-            auth=True,
-            auth_token=self.access_token
-        )
-        self.access_token = None
-    
-    def test_02_add_admin_as_admin(self):
-        """Test adding admin user with admin privileges"""
         # Login as test admin
-        login_response = self.request(
+        admin_login = self.request(
             "POST",
             "/api/v1/login",
             data={
@@ -93,116 +66,272 @@ class AdminUserTest(BaseTest):
             auth=False
         )
         
-        if not login_response['success']:
+        if not admin_login['success']:
             self.add_result(TestResult(
                 "Login as admin",
                 False,
                 None,
                 "Failed to login as admin"
             ))
-            return
+            return False
             
-        self.access_token = login_response['response']['access_token']
-        
-        # Add admin user - should succeed with 201 Created
-        add_response = self.request(
+        self.admin_token = admin_login['response']['access_token']
+        return True
+    
+    def test_01_add_admin_as_regular_user(self):
+        """Test adding admin user without admin privileges"""
+        response = self.request(
             "POST",
             "/api/v1/admin/users",
             data={"username": self.admin_to_add},
             auth=True,
-            auth_token=self.access_token,
+            auth_token=self.user_token,
+            expected_status=403
+        )
+        
+        self.add_result(TestResult(
+            "Add admin user without privileges",
+            response['success'],
+            response['response'],
+            response.get('error')
+        ))
+    
+    def test_02_add_admin_as_admin(self):
+        """Test adding admin user with admin privileges"""
+        response = self.request(
+            "POST",
+            "/api/v1/admin/users",
+            data={"username": self.admin_to_add},
+            auth=True,
+            auth_token=self.admin_token,
             expected_status=201
         )
         
         self.add_result(TestResult(
             "Add admin user with admin privileges",
-            add_response['success'],
-            add_response['response'],
-            add_response.get('error')
+            response['success'],
+            response['response'],
+            response.get('error')
+        ))
+        
+        # Verify audit log entry for add action
+        audit_response = self.request(
+            "GET",
+            f"/api/v1/admin/audit?username={self.admin_to_add}&action=ADD&limit=1",
+            auth=True,
+            auth_token=self.admin_token
+        )
+        
+        success = audit_response['success']
+        error = None
+        if success:
+            data = audit_response['response']
+            if not data.get('audit_logs'):
+                success = False
+                error = "No audit log entry found"
+            else:
+                log = data['audit_logs'][0]
+                if (log.get('action') != 'ADD' or 
+                    log.get('username') != self.admin_to_add or
+                    log.get('changed_by') != 'test_admin'):
+                    success = False
+                    error = f"Invalid log entry: {log}"
+        
+        self.add_result(TestResult(
+            "Verify audit log for add action",
+            success,
+            audit_response.get('response'),
+            error or audit_response.get('error')
         ))
     
     def test_03_get_admin_user(self):
         """Test getting admin user details"""
-        if not self.access_token:
-            self.add_result(TestResult(
-                "Get admin user details",
-                False,
-                None,
-                "No access token available (previous test failed)"
-            ))
-            return
-            
-        # Get admin user details
-        get_response = self.request(
+        response = self.request(
             "GET",
             f"/api/v1/admin/users/{self.admin_to_add}",
             auth=True,
-            auth_token=self.access_token
+            auth_token=self.admin_token
         )
         
-        # Include full response details in error for debugging
-        success = get_response['success']
-        error = None if success else f"Status: {get_response.get('status_code')}, Response: {get_response.get('response')}, Error: {get_response.get('error')}"
+        success = response['success']
+        error = None
+        if success:
+            data = response['response']
+            if not isinstance(data, dict):
+                success = False
+                error = "Invalid response format"
+            elif not all(key in data for key in ['username', 'type', 'created_at', 'added_by']):
+                success = False
+                error = "Missing required fields in response"
+            elif data['username'] != self.admin_to_add:
+                success = False
+                error = "Incorrect username in response"
         
         self.add_result(TestResult(
             "Get admin user details",
             success,
-            get_response.get('response'),
-            error
+            response.get('response'),
+            error or response.get('error')
         ))
     
-    def test_04_remove_admin_user(self):
+    def test_04_audit_log_filters(self):
+        """Test audit log filtering options"""
+        # Test username filter
+        username_response = self.request(
+            "GET",
+            f"/api/v1/admin/audit?username={self.admin_to_add}",
+            auth=True,
+            auth_token=self.admin_token
+        )
+        
+        success = username_response['success']
+        error = None
+        if success:
+            data = username_response['response']
+            if not data.get('audit_logs'):
+                success = False
+                error = "No audit logs found"
+            else:
+                for log in data['audit_logs']:
+                    if log.get('username') != self.admin_to_add:
+                        success = False
+                        error = "Username filter not respected"
+                        break
+        
+        self.add_result(TestResult(
+            "Filter audit log by username",
+            success,
+            username_response.get('response'),
+            error or username_response.get('error')
+        ))
+        
+        # Test action filter
+        action_response = self.request(
+            "GET",
+            "/api/v1/admin/audit?action=ADD",
+            auth=True,
+            auth_token=self.admin_token
+        )
+        
+        success = action_response['success']
+        error = None
+        if success:
+            data = action_response['response']
+            if not data.get('audit_logs'):
+                success = False
+                error = "No audit logs found"
+            else:
+                for log in data['audit_logs']:
+                    if log.get('action') != 'ADD':
+                        success = False
+                        error = "Action filter not respected"
+                        break
+        
+        self.add_result(TestResult(
+            "Filter audit log by action",
+            success,
+            action_response.get('response'),
+            error or action_response.get('error')
+        ))
+        
+        # Test limit filter
+        limit_response = self.request(
+            "GET",
+            "/api/v1/admin/audit?limit=1",
+            auth=True,
+            auth_token=self.admin_token
+        )
+        
+        success = limit_response['success']
+        error = None
+        if success:
+            data = limit_response['response']
+            if len(data.get('audit_logs', [])) > 1:
+                success = False
+                error = "Limit filter not respected"
+        
+        self.add_result(TestResult(
+            "Filter audit log with limit",
+            success,
+            limit_response.get('response'),
+            error or limit_response.get('error')
+        ))
+    
+    def test_05_remove_admin_user(self):
         """Test removing admin user"""
-        if not self.access_token:
-            self.add_result(TestResult(
-                "Remove admin user",
-                False,
-                None,
-                "No access token available (previous test failed)"
-            ))
-            return
-            
-        # Remove admin user
-        remove_response = self.request(
+        response = self.request(
             "DELETE",
             f"/api/v1/admin/users/{self.admin_to_add}",
             auth=True,
-            auth_token=self.access_token
+            auth_token=self.admin_token
         )
         
         self.add_result(TestResult(
             "Remove admin user",
-            remove_response['success'],
-            remove_response.get('response'),
-            remove_response.get('error')
+            response['success'],
+            response.get('response'),
+            response.get('error')
         ))
         
-        # Verify user was removed - should get 404
+        # Verify audit log entry for remove action
+        audit_response = self.request(
+            "GET",
+            f"/api/v1/admin/audit?username={self.admin_to_add}&action=REMOVE&limit=1",
+            auth=True,
+            auth_token=self.admin_token
+        )
+        
+        success = audit_response['success']
+        error = None
+        if success:
+            data = audit_response['response']
+            if not data.get('audit_logs'):
+                success = False
+                error = "No audit log entry found"
+            else:
+                log = data['audit_logs'][0]
+                if (log.get('action') != 'REMOVE' or 
+                    log.get('username') != self.admin_to_add or
+                    log.get('changed_by') != 'pcapuser'):  # Database trigger uses current_user
+                    success = False
+                    error = f"Invalid log entry: {log}"
+        
+        self.add_result(TestResult(
+            "Verify audit log for remove action",
+            success,
+            audit_response.get('response'),
+            error or audit_response.get('error')
+        ))
+        
+        # Verify user was removed
         verify_response = self.request(
             "GET",
             f"/api/v1/admin/users/{self.admin_to_add}",
             auth=True,
-            auth_token=self.access_token,
+            auth_token=self.admin_token,
             expected_status=404
         )
         
-        # Include full response details in error for debugging
-        success = verify_response['success']
-        error = None if success else f"Status: {verify_response.get('status_code')}, Response: {verify_response.get('response')}, Error: {verify_response.get('error')}"
-        
         self.add_result(TestResult(
             "Verify admin user was removed",
-            success,
+            verify_response['success'],
             verify_response.get('response'),
-            error
+            verify_response.get('error')
         ))
     
     def teardown(self):
-        """Cleanup - logout if needed"""
-        if self.access_token:
+        """Cleanup - logout both users"""
+        if self.user_token:
             self.request(
                 "POST",
                 "/api/v1/logout",
                 auth=True,
-                auth_token=self.access_token
+                auth_token=self.user_token
+            )
+        if self.admin_token:
+            self.request(
+                "POST",
+                "/api/v1/logout",
+                auth=True,
+                auth_token=self.admin_token
             )
