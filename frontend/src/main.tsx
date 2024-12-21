@@ -10,6 +10,38 @@ import './index.css'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
 
+// Error Boundary Component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Application Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <h1>Something went wrong.</h1>
+          <button onClick={() => window.location.reload()}>Reload Page</button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const theme = createTheme({
   primaryColor: 'blue',
   colors: {
@@ -96,14 +128,25 @@ const theme = createTheme({
   },
 });
 
+// Get stored theme or system preference
+const getInitialColorScheme = () => {
+  const storedTheme = localStorage.getItem('theme');
+  if (storedTheme) return storedTheme;
+  
+  const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return systemPrefersDark ? 'dark' : 'light';
+};
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <MantineProvider theme={theme} defaultColorScheme={localStorage.getItem('theme') || 'dark'}>
-        <ModalsProvider>
-          <App />
-        </ModalsProvider>
-      </MantineProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <MantineProvider theme={theme} defaultColorScheme={getInitialColorScheme()}>
+          <ModalsProvider>
+            <App />
+          </ModalsProvider>
+        </MantineProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>,
 ) 

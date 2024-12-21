@@ -30,7 +30,7 @@ import {
   IconPlayerStop,
 } from '@tabler/icons-react';
 import apiService from '../../services/api';
-import type { Job, Task } from '../../services/api';
+import type { Job } from '../../services/api';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },

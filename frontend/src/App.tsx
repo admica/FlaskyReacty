@@ -1,16 +1,16 @@
 // PATH: src/App.tsx
 
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { SessionTimeoutProvider } from './components/auth/SessionTimeoutProvider';
-import { AppLayout } from './components/layout/AppLayout';
-import LoginPage from './components/auth/LoginPage';
-import { Dashboard } from './components/dashboard/Dashboard';
-import { SensorsPage } from './components/sensors/SensorsPage';
-import { JobsPage } from './components/jobs/JobsPage';
-import { JobAnalysis } from './components/jobs/JobAnalysis';
-import { AdminPage } from './components/admin/AdminPage';
-import { NetworkPage } from './components/network/NetworkPage';
-import { PreferencesPage } from './components/preferences/PreferencesPage';
+import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
+import { AppLayout } from '@/components/layout/AppLayout';
+import LoginPage from '@/components/auth/LoginPage';
+import { Dashboard } from '@/components/dashboard/Dashboard';
+import { SensorsPage } from '@/components/sensors/SensorsPage';
+import { JobsPage } from '@/components/jobs/JobsPage';
+import { JobAnalysis } from '@/components/jobs/JobAnalysis';
+import { AdminPage } from '@/components/admin/AdminPage';
+import { NetworkPage } from '@/components/network/NetworkPage';
+import { PreferencesPage } from '@/components/preferences/PreferencesPage';
 
 function App() {
   return (

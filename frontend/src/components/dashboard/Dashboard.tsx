@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import {
-  Container,
   Paper,
   Title,
   Text,
@@ -19,12 +18,11 @@ import {
   Modal,
   ScrollArea,
   Box,
-  Code,
 } from '@mantine/core';
 import { DateTimePicker } from '@mantine/dates';
 import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
 import apiService from '../../services/api';
-import type { Job, Sensor, Task } from '../../services/api';
+import type { Job, Sensor } from '../../services/api';
 
 export function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);

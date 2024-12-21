@@ -18,37 +18,44 @@ const getHostIp = () => {
   return 'localhost';
 };
 
+// Determine if we're in production
+const isProd = process.env.NODE_ENV === 'production';
+
 export default defineConfig({
   plugins: [react()],
   root: '.',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    sourcemap: !isProd,
   },
   server: {
-    https: {
+    https: !isProd ? {
       key: fs.readFileSync('/opt/pcapserver/ssl/cert.key'),
       cert: fs.readFileSync('/opt/pcapserver/ssl/cert.crt'),
-    },
+    } : undefined,
     proxy: {
       '/api': {
-        target: 'https://localhost:3000',
+        target: isProd ? 'https://api.pcapserver.com' : 'https://localhost:3000',
         changeOrigin: true,
-        secure: false,
+        secure: isProd,
       },
     },
     port: 5173,
     host: '0.0.0.0',
     strictPort: true,
-    hmr: {
+    hmr: !isProd ? {
       protocol: 'wss',
       host: getHostIp(),
       clientPort: 5173
-    }
+    } : undefined
   },
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src')
-    }
+    alias: [
+      {
+        find: '@',
+        replacement: path.resolve(__dirname, 'src')
+      }
+    ]
   }
 }) 
