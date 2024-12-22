@@ -2,44 +2,18 @@
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { MantineProvider, createTheme } from '@mantine/core'
+import { MantineProvider, createTheme, MantineTheme, MantineColorScheme } from '@mantine/core'
 import { ModalsProvider } from '@mantine/modals'
 import { BrowserRouter } from 'react-router-dom'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import App from './App'
 import './index.css'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
 
-// Error Boundary Component
-class ErrorBoundary extends React.Component<
-  { children: React.ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Application Error:', error, errorInfo);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: '20px', textAlign: 'center' }}>
-          <h1>Something went wrong.</h1>
-          <button onClick={() => window.location.reload()}>Reload Page</button>
-        </div>
-      );
-    }
-
-    return this.props.children;
-  }
+interface StyleParams {
+  colorScheme: MantineColorScheme;
+  theme: MantineTheme;
 }
 
 const theme = createTheme({
@@ -73,10 +47,10 @@ const theme = createTheme({
   components: {
     AppShell: {
       styles: {
-        main: ({ colorScheme, theme }) => ({
+        main: ({ colorScheme, theme }: StyleParams) => ({
           backgroundColor: colorScheme === 'dark' ? theme.colors.dark[7] : theme.colors.light[0],
         }),
-        navbar: ({ colorScheme, theme }) => ({
+        navbar: ({ colorScheme, theme }: StyleParams) => ({
           backgroundColor: colorScheme === 'dark' ? theme.colors.dark[6] : theme.white,
           borderRight: `1px solid ${
             colorScheme === 'dark' ? theme.colors.dark[4] : theme.colors.gray[3]
@@ -86,7 +60,7 @@ const theme = createTheme({
     },
     Paper: {
       styles: {
-        root: ({ colorScheme, theme }) => ({
+        root: ({ colorScheme, theme }: StyleParams) => ({
           backgroundColor: colorScheme === 'dark' ? theme.colors.dark[6] : theme.white,
           color: colorScheme === 'dark' ? theme.white : theme.black,
         }),
@@ -94,22 +68,22 @@ const theme = createTheme({
     },
     Button: {
       styles: {
-        root: ({ colorScheme, theme }) => ({
+        root: ({ colorScheme, theme }: StyleParams) => ({
           '&[data-hover]': {
             backgroundColor: colorScheme === 'dark' 
-              ? theme.fn.lighten(theme.colors.dark[6], 0.1)
-              : theme.fn.darken(theme.colors.gray[0], 0.1),
+              ? theme.colors.dark[5]
+              : theme.colors.gray[1],
           },
         }),
       },
     },
     NavLink: {
       styles: {
-        root: ({ colorScheme, theme }) => ({
+        root: ({ colorScheme, theme }: StyleParams) => ({
           '&[data-active]': {
             backgroundColor: colorScheme === 'dark'
-              ? theme.fn.rgba(theme.colors.blue[9], 0.25)
-              : theme.fn.rgba(theme.colors.blue[0], 0.35),
+              ? theme.colors.dark[5]
+              : theme.colors.blue[0],
             color: colorScheme === 'dark'
               ? theme.colors.blue[4]
               : theme.colors.blue[7],
@@ -119,8 +93,8 @@ const theme = createTheme({
             : theme.colors.gray[7],
           '&:hover': {
             backgroundColor: colorScheme === 'dark'
-              ? theme.fn.rgba(theme.colors.blue[9], 0.15)
-              : theme.fn.rgba(theme.colors.blue[0], 0.25),
+              ? theme.colors.dark[6]
+              : theme.colors.blue[0],
           },
         }),
       },
@@ -129,9 +103,9 @@ const theme = createTheme({
 });
 
 // Get stored theme or system preference
-const getInitialColorScheme = () => {
+const getInitialColorScheme = (): MantineColorScheme => {
   const storedTheme = localStorage.getItem('theme');
-  if (storedTheme) return storedTheme;
+  if (storedTheme === 'light' || storedTheme === 'dark') return storedTheme;
   
   const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   return systemPrefersDark ? 'dark' : 'light';

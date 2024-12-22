@@ -1,208 +1,72 @@
-import api from '../api/axios';
+import axios from 'axios';
 
-// Helper function for consistent error logging
-const logApiError = (context: string, error: any) => {
-    console.error(`${context}:`, {
-        status: error.response?.status,
-        data: error.response?.data,
-        headers: error.response?.headers,
-        config: {
-            url: error.config?.url,
-            method: error.config?.method,
-            headers: error.config?.headers
-        }
-    });
-    return error.response?.data || error;
+// Debug logging function
+const debug = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  const logMessage = data 
+    ? `[API] ${message} | ${JSON.stringify(data)}`
+    : `[API] ${message}`;
+  console.debug(`${timestamp} ${logMessage}`);
+  // If we have a debug message handler from the app, use it
+  const debugHandler = (window as any).addDebugMessage;
+  if (typeof debugHandler === 'function') {
+    debugHandler(logMessage);
+  }
 };
 
-export interface LoginResponse {
-    access_token: string;
-    refresh_token: string;
-    role: string;
-}
-
+// Interfaces
 export interface Sensor {
-    name: string;
-    status: string;
-    location: string;
-    fqdn?: string;
-    pcap_avail?: number;
-    totalspace?: string;
-    usedspace?: string;
-    last_update?: string;
-    version?: string;
-}
-
-export interface SensorSummary {
-    total: number;
-    online: number;
-    byLocation: {
-        location: string;
-        total: number;
-        online: number;
-    }[];
-}
-
-export interface Task {
-    id: number;
-    job_id: number;
-    task_id: string;
-    sensor: string;
-    status: string;
-    pcap_size: string | null;
-    temp_path: string | null;
-    result_message: string | null;
-    start_time: string | null;
-    end_time: string | null;
-    created_at: string | null;
-    started_at: string | null;
-    completed_at: string | null;
+  name: string;
+  fqdn: string;
+  status: string;
+  pcap_avail: number;
+  totalspace: string;
+  usedspace: string;
+  last_update: string;
+  version: string | null;
+  location: string;
 }
 
 export interface Job {
-    id: number;
-    username: string;
-    status: string;
-    description: string;
-    location: string;
-    src_ip: string | null;
-    dst_ip: string | null;
-    event_time: string | null;
-    start_time: string;
-    end_time: string;
-    started: string | null;
-    completed: string | null;
-    result: string | null;
-    filename: string | null;
-    analysis: string | null;
-    tz: string;
-    result_size: string | null;
-    result_path: string | null;
-    result_message: string | null;
-    created_at: string | null;
-    started_at: string | null;
-    completed_at: string | null;
-    tasks: Task[];
+  id: number;
+  username: string;
+  status: string;
+  description: string;
+  location: string;
+  src_ip: string | null;
+  dst_ip: string | null;
+  event_time: string | null;
+  start_time: string;
+  end_time: string;
+  started: string | null;
+  completed: string | null;
+  result: string | null;
+  filename: string | null;
+  analysis: string | null;
+  tz: string;
+  result_size: string | null;
+  result_path: string | null;
+  result_message: string | null;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  tasks: Task[];
 }
 
-export interface JobsResponse {
-    jobs: Job[];
-}
-
-export interface SystemStatus {
-    server_status: string;
-    system_info: {
-        cpu: {
-            per_cpu: number[];
-            average: number;
-        };
-        memory: {
-            total: number;
-            available: number;
-            used: number;
-            percent: number;
-        };
-        disk: {
-            total: number;
-            used: number;
-            free: number;
-            percent: number;
-        };
-        threads: {
-            name: string;
-            id: number;
-            alive: boolean;
-            daemon: boolean;
-        }[];
-    };
-    application_stats: {
-        active_jobs: number;
-        queued_jobs: number;
-        total_sensors: number;
-        sensor_status: {
-            online: number;
-            offline: number;
-            maintenance: number;
-            total: number;
-        };
-        request_count: number;
-    };
-}
-
-export interface ActiveUser {
-    username: string;
-    last_activity: string;
-}
-
-export interface Location {
-    site: string;
-    name: string;
-    latitude: number;
-    longitude: number;
-    description: string;
-    color: string;
-}
-
-export interface ApiConnection {
-    src_location: string;
-    dst_location: string;
-    packet_count: number;
-    latest_seen: number;
-    earliest_seen: number;
-}
-
-export interface LocationsResponse {
-    locations: Location[];
-    cached: boolean;
-    timestamp: string;
-}
-
-export interface ConnectionsResponse {
-    connections: ApiConnection[];
-    cached: boolean;
-    timestamp: string;
-}
-
-export interface LogFile {
-    name: string;
-    size: number;
-    modified: string;
-}
-
-export interface LogsResponse {
-    files: LogFile[];
-    timestamp: string;
-}
-
-export interface SensorsResponse {
-    sensors: Sensor[];
-}
-
-export interface Device {
-    name: string;
-    port: number;
-    type: string;
-    status: string;
-    last_checked: string;
-    runtime: number;
-    workers: number;
-    src_subnets: number;
-    dst_subnets: number;
-    uniq_subnets: number;
-    avg_idle_time: number;
-    avg_work_time: number;
-    overflows: number;
-    size: string;
-    version: string;
-    output_path?: string;
-    proc?: string;
-    stats_date?: string;
-}
-
-export interface DevicesResponse {
-    count: number;
-    devices: Device[];
-    sensor: string;
+export interface Task {
+  id: number;
+  job_id: number;
+  task_id: string;
+  sensor: string;
+  status: string;
+  pcap_size: string | null;
+  temp_path: string | null;
+  result_message: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
 }
 
 export interface Admin {
@@ -211,413 +75,357 @@ export interface Admin {
   last_active: string;
 }
 
-export interface UserPreferences {
-    avatar_seed: number;
-    theme: string;
-    timezone: string;
+export interface Location {
+  site: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  description: string;
+  color: string;
 }
 
-const apiService = {
-    login: async (username: string, password: string): Promise<LoginResponse> => {
-        console.log('Attempting login for user:', username);
-        try {
-            const response = await api.post('/login', { username, password });
-            console.log('Login response:', response.data);
-            
-            // Store tokens and user info
-            localStorage.setItem('access_token', response.data.access_token);
-            localStorage.setItem('refresh_token', response.data.refresh_token);
-            localStorage.setItem('role', response.data.role);
-            localStorage.setItem('isAdmin', response.data.role === 'admin' ? 'true' : 'false');
-            localStorage.setItem('username', username);
-            
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Login failed', error);
-        }
-    },
+export interface ApiConnection {
+  src_location: string;
+  dst_location: string;
+  packet_count: number;
+  latest_seen: number;
+  earliest_seen: number;
+}
 
-    setAuthToken: (token: string) => {
-        console.log('Setting auth token');
-        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    },
+export interface JobSubmitData {
+  location: string;
+  params: {
+    description?: string;
+    src_ip?: string;
+    dst_ip?: string;
+    event_time?: string;
+    start_time?: string;
+    end_time?: string;
+    tz: string;
+  };
+}
 
-    clearAuthToken: () => {
-        console.log('Clearing auth token');
-        delete api.defaults.headers.common['Authorization'];
-    },
+// Create axios instance
+export const api = axios.create({
+  baseURL: (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-    getSensors: async (): Promise<SensorsResponse> => {
-        try {
-            console.log('Fetching sensors with auth token');
-            const response = await api.get('/sensors');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching sensors', error);
-        }
-    },
+// Token refresh state
+let isRefreshing = false;
+let failedQueue: any[] = [];
 
-    getSensorDetails: async (sensorName: string): Promise<Sensor> => {
-        try {
-            const response = await api.get(`/sensors/${sensorName}/status`);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching sensor details', error);
-        }
-    },
-
-    getSensorStatus: async (sensorName: string): Promise<any> => {
-        try {
-            const response = await api.get(`/sensors/${sensorName}/status`);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching sensor status', error);
-        }
-    },
-
-    getSensorDevices: async (sensorName: string): Promise<DevicesResponse> => {
-        try {
-            console.log(`Fetching devices for sensor: ${sensorName}`);
-            const response = await api.get(`/sensors/${sensorName}/devices`);
-            console.log('Devices response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError(`Error fetching devices for sensor ${sensorName}`, error);
-        }
-    },
-
-    refreshSensor: async (sensorName: string): Promise<void> => {
-        try {
-            await api.get(`/sensors/${sensorName}/status`);
-        } catch (error: any) {
-            throw logApiError(`Error refreshing sensor ${sensorName}`, error);
-        }
-    },
-
-    logout: () => {
-        // Clear all auth-related items from localStorage
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('role');
-        localStorage.removeItem('isAdmin');
-        localStorage.removeItem('username');
-        
-        // Clear auth header
-        delete api.defaults.headers.common['Authorization'];
-        
-        // Redirect to login page
-        window.location.href = '/login';
-    },
-
-    getJobs: async (params?: { username?: string }): Promise<Job[]> => {
-        try {
-            const response = await api.get<JobsResponse>('/jobs', { params });
-            return response.data.jobs;
-        } catch (error: any) {
-            throw logApiError('Error fetching jobs', error);
-        }
-    },
-
-    getJobDetails: async (jobId: number): Promise<Job> => {
-        try {
-            const response = await api.get(`/jobs/${jobId}`);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError(`Error fetching job details for job ${jobId}`, error);
-        }
-    },
-
-    getJobAnalysis: async (jobId: number): Promise<any> => {
-        try {
-            const response = await api.get(`/jobs/${jobId}/analysis`);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError(`Error fetching job analysis for job ${jobId}`, error);
-        }
-    },
-
-    getNetworkLocations: async (): Promise<LocationsResponse> => {
-        try {
-            const response = await api.get<LocationsResponse>('/network/locations');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching network locations', error);
-        }
-    },
-
-    getNetworkConnections: async (hours?: string): Promise<ConnectionsResponse> => {
-        try {
-            const url = hours ? `/network/connections?hours=${hours}` : '/network/connections';
-            const response = await api.get<ConnectionsResponse>(url);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching network connections', error);
-        }
-    },
-
-    getSystemStatus: async (): Promise<SystemStatus> => {
-        try {
-            const response = await api.get('/admin/system/status');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching system status', error);
-        }
-    },
-
-    getActiveUsers: async (): Promise<{ users: ActiveUser[] }> => {
-        try {
-            const response = await api.get('/admin/users');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching active users', error);
-        }
-    },
-
-    cancelJob: async (jobId: number): Promise<void> => {
-        try {
-            await api.post(`/jobs/${jobId}/cancel`);
-        } catch (error: any) {
-            throw logApiError(`Error cancelling job ${jobId}`, error);
-        }
-    },
-
-    deleteJob: async (jobId: number): Promise<void> => {
-        try {
-            await api.delete(`/jobs/${jobId}`);
-        } catch (error: any) {
-            throw logApiError(`Error deleting job ${jobId}`, error);
-        }
-    },
-
-    refreshToken: async (): Promise<LoginResponse> => {
-        try {
-            const response = await api.post('/refresh');
-            // Update stored tokens
-            localStorage.setItem('access_token', response.data.access_token);
-            localStorage.setItem('refresh_token', response.data.refresh_token);
-            return response.data;
-        } catch (error: any) {
-            const err = logApiError('Token refresh failed', error);
-            // If refresh fails, force logout
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            window.location.href = '/login';
-            throw err;
-        }
-    },
-
-    // Health endpoints
-    getHealth: async () => {
-        try {
-            console.log('Fetching health status...');
-            const response = await api.get('/health');
-            console.log('Health response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Health check error', error);
-        }
-    },
-
-    getVersion: async () => {
-        try {
-            const response = await api.get('/version');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Version check error', error);
-        }
-    },
-
-    getStorage: async () => {
-        try {
-            console.log('Fetching storage status...');
-            const response = await api.get('/storage');
-            console.log('Storage response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Storage check error', error);
-        }
-    },
-
-    // Cache operations
-    clearCache: async (cacheType: string) => {
-        try {
-            const response = await api.post('/admin/cache/clear', { type: cacheType });
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Cache clear error', error);
-        }
-    },
-
-    refreshCache: async (cacheType: string) => {
-        try {
-            const response = await api.post('/admin/cache/refresh', { type: cacheType });
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Cache refresh error', error);
-        }
-    },
-
-    getCacheMetrics: async () => {
-        try {
-            const response = await api.get('/admin/cache/metrics');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Cache metrics error', error);
-        }
-    },
-
-    analyzeStorage: async () => {
-        try {
-            const response = await api.post('/storage/analyze');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Storage analysis error', error);
-        }
-    },
-
-    // Log endpoints
-    getLogFiles: async () => {
-        try {
-            const response = await api.get('/logs/list');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Log files list error', error);
-        }
-    },
-
-    getLogContent: async (filename: string, lines: number = 100) => {
-        try {
-            const response = await api.get(`/logs/content/${filename}`, {
-                params: { lines }
-            });
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Log content error', error);
-        }
-    },
-
-    streamLog: async (filename: string, callback: (line: string) => void) => {
-        try {
-            const response = await api.get(`/logs/stream/${filename}`, {
-                responseType: 'text',
-                onDownloadProgress: (progressEvent) => {
-                    const lines = (progressEvent as any).currentTarget.response.split('\n');
-                    callback(lines[lines.length - 1]);
-                }
-            });
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Log streaming error', error);
-        }
-    },
-
-    getLogs: async (): Promise<LogsResponse> => {
-        try {
-            console.log('Fetching logs...');
-            const response = await api.get('/logs');
-            console.log('Logs response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Logs fetch error', error);
-        }
-    },
-
-    submitJob: async (jobData: {
-        location: string;
-        params: {
-            description?: string;
-            src_ip?: string;
-            dst_ip?: string;
-            event_time?: string;
-            start_time?: string;
-            end_time?: string;
-            tz: string;
-        };
-    }): Promise<{ job_id: number }> => {
-        try {
-            console.log('Submitting job with data:', jobData);
-            const response = await api.post('/jobs/submit', jobData);
-            console.log('Job submission response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error submitting job', error);
-        }
-    },
-
-    getLocations: async (): Promise<LocationsResponse> => {
-        try {
-            console.log('Fetching locations...');
-            const response = await api.get('/network/locations');
-            console.log('Locations response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching locations', error);
-        }
-    },
-
-    getConnections: async (): Promise<ConnectionsResponse> => {
-        try {
-            console.log('Fetching connections...');
-            const response = await api.get('/network/connections');
-            console.log('Connections response:', response.data);
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching connections', error);
-        }
-    },
-
-    // Preferences endpoints
-    get: async (endpoint: string) => {
-        try {
-            const response = await api.get(endpoint);
-            return response;
-        } catch (error: any) {
-            throw logApiError(`Error fetching ${endpoint}`, error);
-        }
-    },
-
-    post: async (endpoint: string, data: any) => {
-        try {
-            const response = await api.post(endpoint, data);
-            return response;
-        } catch (error: any) {
-            throw logApiError(`Error posting to ${endpoint}`, error);
-        }
-    },
-
-    async getAdmins(): Promise<Admin[]> {
-        try {
-            const response = await api.get('/admin/users');
-            return response.data.admins || [];
-        } catch (error: any) {
-            throw logApiError('Error fetching admin users', error);
-        }
-    },
-
-    async addAdmin(username: string): Promise<void> {
-        try {
-            await api.post('/admin/users', { username });
-        } catch (error: any) {
-            throw logApiError('Error adding admin user', error);
-        }
-    },
-
-    async removeAdmin(username: string): Promise<void> {
-        try {
-            await api.delete(`/admin/users/${username}`);
-        } catch (error: any) {
-            throw logApiError('Error removing admin user', error);
-        }
-    },
-
-    getPreferences: async (): Promise<UserPreferences> => {
-        try {
-            const response = await api.get('/preferences');
-            return response.data;
-        } catch (error: any) {
-            throw logApiError('Error fetching preferences', error);
-        }
+const processQueue = (error: any, token: string | null = null) => {
+  debug(`Processing queued requests (${failedQueue.length} requests)${error ? ' with error' : ''}`);
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
     }
+  });
+  failedQueue = [];
+};
+
+// Create a separate axios instance for refresh requests
+const refreshApi = axios.create({
+  baseURL: (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    config.headers['Authorization'] = `Bearer ${token}`;
+    debug('Adding auth token to request', { url: config.url });
+  }
+  return config;
+}, (error) => {
+  debug('Request interceptor error', { error: error.message });
+  return Promise.reject(error);
+});
+
+// Add response interceptor
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      debug('Received 401 error, attempting token refresh', {
+        url: originalRequest.url,
+        isRefreshing
+      });
+
+      if (isRefreshing) {
+        debug('Token refresh already in progress, queueing request');
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then(token => {
+            debug('Retrying queued request with new token', { url: originalRequest.url });
+            originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch(err => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) {
+        debug('No refresh token found, redirecting to login');
+        processQueue(error);
+        clearAuthData();
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+
+      try {
+        debug('Sending refresh token request');
+        const response = await refreshApi.post('/refresh', {}, {
+          headers: {
+            'Authorization': `Bearer ${refreshToken}`
+          }
+        });
+
+        const { access_token, refresh_token, role } = response.data;
+        debug('Token refresh successful', { role });
+        
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('refresh_token', refresh_token);
+        localStorage.setItem('role', role);
+        localStorage.setItem('isAdmin', role === 'admin' ? 'true' : 'false');
+
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        originalRequest.headers['Authorization'] = `Bearer ${access_token}`;
+
+        processQueue(null, access_token);
+        isRefreshing = false;
+        debug('Token refresh complete, retrying original request');
+
+        return api(originalRequest);
+      } catch (refreshError: any) {
+        debug('Token refresh failed', { 
+          error: refreshError.message,
+          status: refreshError.response?.status,
+          data: refreshError.response?.data 
+        });
+        processQueue(refreshError);
+        clearAuthData();
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+const clearAuthData = () => {
+  debug('Clearing all auth data');
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('role');
+  localStorage.removeItem('isAdmin');
+  localStorage.removeItem('username');
+  delete api.defaults.headers.common['Authorization'];
+};
+
+// API Service methods
+const apiService = {
+  // Auth
+  async login(username: string, password: string) {
+    debug('Attempting login', { username });
+    const response = await api.post('/login', { username, password });
+    const { access_token, refresh_token, role } = response.data;
+    
+    localStorage.setItem('access_token', access_token);
+    localStorage.setItem('refresh_token', refresh_token);
+    localStorage.setItem('role', role);
+    localStorage.setItem('isAdmin', role === 'admin' ? 'true' : 'false');
+    localStorage.setItem('username', username);
+    
+    debug('Login successful', { role });
+    return response.data;
+  },
+
+  async logout() {
+    debug('Logging out');
+    clearAuthData();
+    window.location.href = '/login';
+  },
+
+  async refreshToken() {
+    debug('Refreshing token');
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const response = await refreshApi.post('/refresh', {}, {
+      headers: {
+        'Authorization': `Bearer ${refreshToken}`
+      }
+    });
+
+    const { access_token, refresh_token, role } = response.data;
+    localStorage.setItem('access_token', access_token);
+    localStorage.setItem('refresh_token', refresh_token);
+    localStorage.setItem('role', role);
+    localStorage.setItem('isAdmin', role === 'admin' ? 'true' : 'false');
+
+    return response.data;
+  },
+
+  // Sensors
+  async getSensors() {
+    debug('Fetching sensors');
+    const response = await api.get<{ sensors: Sensor[] }>('/sensors');
+    debug(`Fetched ${response.data.sensors.length} sensors`);
+    return response.data;
+  },
+
+  async addSensor(sensor: Sensor) {
+    debug('Adding new sensor', sensor);
+    const response = await api.post('/sensors', sensor);
+    return response.data;
+  },
+
+  async getSensorDevices(sensorName: string) {
+    debug(`Fetching devices for sensor: ${sensorName}`);
+    const response = await api.get(`/sensors/${sensorName}/devices`);
+    return response.data;
+  },
+
+  // Jobs
+  async getJobs(params?: { username?: string }) {
+    debug('Fetching jobs', params);
+    const response = await api.get<{ jobs: Job[] }>('/jobs', { params });
+    debug(`Fetched ${response.data.jobs.length} jobs`);
+    return response.data.jobs;
+  },
+
+  async getJobDetails(jobId: number) {
+    debug(`Fetching job details: ${jobId}`);
+    const response = await api.get<Job>(`/jobs/${jobId}`);
+    return response.data;
+  },
+
+  async getJobAnalysis(jobId: number) {
+    debug(`Fetching job analysis: ${jobId}`);
+    const response = await api.get(`/jobs/${jobId}/analysis`);
+    return response.data;
+  },
+
+  async submitJob(jobData: JobSubmitData) {
+    debug('Submitting job', jobData);
+    // Ensure all undefined values are removed from the params object
+    const cleanedParams = Object.fromEntries(
+      Object.entries(jobData.params)
+        .filter(([_, value]) => value !== undefined)
+    );
+    const cleanedData = {
+      ...jobData,
+      params: cleanedParams
+    };
+    debug('Cleaned job data', cleanedData);
+    const response = await api.post('/jobs/submit', cleanedData);
+    return response.data;
+  },
+
+  async cancelJob(jobId: number) {
+    debug(`Cancelling job: ${jobId}`);
+    await api.post(`/jobs/${jobId}/cancel`);
+  },
+
+  async deleteJob(jobId: number) {
+    debug(`Deleting job: ${jobId}`);
+    await api.delete(`/jobs/${jobId}`);
+  },
+
+  // Network
+  async getLocations() {
+    debug('Fetching network locations');
+    const response = await api.get<{ locations: Location[] }>('/network/locations');
+    debug(`Fetched ${response.data.locations.length} locations`);
+    return response.data;
+  },
+
+  async getConnections() {
+    debug('Fetching network connections');
+    const response = await api.get<{ connections: ApiConnection[] }>('/network/connections');
+    debug(`Fetched ${response.data.connections.length} connections`);
+    return response.data;
+  },
+
+  // Admin
+  async getAdmins() {
+    debug('Fetching admin users');
+    const response = await api.get<{ admins: Admin[] }>('/admin/users');
+    return response.data.admins || [];
+  },
+
+  async addAdmin(username: string) {
+    debug(`Adding admin user: ${username}`);
+    await api.post('/admin/users', { username });
+  },
+
+  async removeAdmin(username: string) {
+    debug(`Removing admin user: ${username}`);
+    await api.delete(`/admin/users/${username}`);
+  },
+
+  // System
+  async getHealth() {
+    debug('Fetching health status');
+    const response = await api.get('/health');
+    return response.data;
+  },
+
+  async getStorage() {
+    debug('Fetching storage status');
+    const response = await api.get('/storage');
+    return response.data;
+  },
+
+  async getLogs() {
+    debug('Fetching logs');
+    const response = await api.get('/logs');
+    return response.data;
+  },
+
+  // Cache
+  async clearCache(cacheType: string) {
+    debug(`Clearing cache: ${cacheType}`);
+    const response = await api.post('/admin/cache/clear', { type: cacheType });
+    return response.data;
+  },
+
+  async refreshCache(cacheType: string) {
+    debug(`Refreshing cache: ${cacheType}`);
+    const response = await api.post('/admin/cache/refresh', { type: cacheType });
+    return response.data;
+  },
+
+  // Preferences
+  async getPreferences() {
+    debug('Fetching user preferences');
+    const response = await api.get('/preferences');
+    return response.data;
+  },
+
+  async savePreferences(data: any) {
+    debug('Saving user preferences', data);
+    const response = await api.post('/preferences', data);
+    return response.data;
+  },
 };
 
 export default apiService; 

@@ -68,15 +68,15 @@ export function PreferencesPage() {
   const loadUserPreferences = async () => {
     try {
       addDebugMessage('Loading user preferences...');
-      const response = await apiService.get('/preferences');
-      addDebugMessage('Loaded preferences from backend: ' + JSON.stringify(response.data));
+      const response = await apiService.getPreferences();
+      addDebugMessage('Loaded preferences from backend: ' + JSON.stringify(response));
       
-      if (response.data) {
-        const backendTheme = response.data.theme || 'dark';
+      if (response) {
+        const backendTheme = response.theme || 'dark';
         setTheme(backendTheme);
         localStorage.setItem('theme', backendTheme);
-        setAvatarSeed(response.data.avatar_seed || Math.floor(Math.random() * 1000000));
-        addDebugMessage('Applied preferences: theme=' + backendTheme + ', avatar_seed=' + response.data.avatar_seed);
+        setAvatarSeed(response.avatar_seed || Math.floor(Math.random() * 1000000));
+        addDebugMessage('Applied preferences: theme=' + backendTheme + ', avatar_seed=' + response.avatar_seed);
       } else {
         // Only use localStorage if backend has no data
         const localTheme = localStorage.getItem('theme') || 'dark';
@@ -97,22 +97,19 @@ export function PreferencesPage() {
   };
 
   const savePreferences = async () => {
-    setLoading(true);
-    setSaveStatus('idle');
-    try {
-      addDebugMessage('Saving preferences...');
-      const currentSeed = avatarSeed || Math.floor(Math.random() * 1000000);
-      setAvatarSeed(currentSeed);
+    const theme = localStorage.getItem('theme');
+    const validTheme = theme === 'light' || theme === 'dark' ? theme : 'light';
+    localStorage.setItem('theme', validTheme);
 
-      await apiService.post('/preferences', {
-        theme,
-        avatar_seed: currentSeed,
+    try {
+      await apiService.savePreferences({
+        theme: validTheme,
+        avatar_seed: avatarSeed,
         settings: {}
       });
-
       addDebugMessage('Preferences saved successfully');
-      localStorage.setItem('theme', theme);
-      setColorScheme(theme as 'light' | 'dark');
+      localStorage.setItem('theme', validTheme);
+      setColorScheme(validTheme as 'light' | 'dark');
       setSaveStatus('success');
       await loadUserPreferences();
     } catch (error: any) {
@@ -133,7 +130,7 @@ export function PreferencesPage() {
     setColorScheme(newTheme as 'light' | 'dark');
     
     try {
-      await apiService.post('/preferences', {
+      await apiService.savePreferences({
         theme: newTheme,
         avatar_seed: avatarSeed,
         settings: {}

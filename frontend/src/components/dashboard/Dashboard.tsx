@@ -18,11 +18,22 @@ import {
   Modal,
   ScrollArea,
   Box,
+  Notification,
 } from '@mantine/core';
 import { DateTimePicker } from '@mantine/dates';
 import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
+import { showNotification } from '@mantine/notifications';
 import apiService from '../../services/api';
 import type { Job, Sensor } from '../../services/api';
+
+// Debug logging function
+const debug = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  const logMessage = data 
+    ? `[Dashboard] ${message} | ${JSON.stringify(data)}`
+    : `[Dashboard] ${message}`;
+  console.debug(`${timestamp} ${logMessage}`);
+};
 
 export function Dashboard() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -124,10 +135,19 @@ export function Dashboard() {
         }
       };
 
+      debug('Submitting job with data:', jobData);
+
       // Submit the job
       const result = await apiService.submitJob(jobData);
       console.log('Job submitted successfully:', result);
       
+      // Show success notification
+      showNotification({
+        title: 'Success',
+        message: 'Job submitted successfully',
+        color: 'green'
+      });
+
       // Clear form
       setFormData({
         location: '',
