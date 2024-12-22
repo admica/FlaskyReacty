@@ -104,7 +104,7 @@ export function PreferencesPage() {
       const currentSeed = avatarSeed || Math.floor(Math.random() * 1000000);
       setAvatarSeed(currentSeed);
 
-      const response = await apiService.post('/preferences', {
+      await apiService.post('/preferences', {
         theme,
         avatar_seed: currentSeed,
         settings: {}

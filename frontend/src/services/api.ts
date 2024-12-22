@@ -211,6 +211,12 @@ export interface Admin {
   last_active: string;
 }
 
+export interface UserPreferences {
+    avatar_seed: number;
+    theme: string;
+    timezone: string;
+}
+
 const apiService = {
     login: async (username: string, password: string): Promise<LoginResponse> => {
         console.log('Attempting login for user:', username);
@@ -601,6 +607,15 @@ const apiService = {
             await api.delete(`/admin/users/${username}`);
         } catch (error: any) {
             throw logApiError('Error removing admin user', error);
+        }
+    },
+
+    getPreferences: async (): Promise<UserPreferences> => {
+        try {
+            const response = await api.get('/preferences');
+            return response.data;
+        } catch (error: any) {
+            throw logApiError('Error fetching preferences', error);
         }
     }
 };

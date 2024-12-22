@@ -93,10 +93,6 @@ export function NetworkGlobe({ sourceFilter, destFilter }: NetworkGlobeProps) {
   const dataLoaded = useRef(false);
   const [arcHeight] = useState<number>(.1);
   const [showDebug, setShowDebug] = useState(false);
-  const [wasRotating, setWasRotating] = useState(true);
-  const [previousRotationSpeed, setPreviousRotationSpeed] = useState(0.3);
-
-  // Add refs for tracking globe rotation
   const wasRotatingRef = useRef(true);
   const previousRotationSpeedRef = useRef(0.5);
   const resizeTimeoutRef = useRef<NodeJS.Timeout>();

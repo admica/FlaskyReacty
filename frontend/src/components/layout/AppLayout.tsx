@@ -86,7 +86,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [avatarSeed, setAvatarSeed] = useState<number | null>(null);
-  const theme = useMantineTheme();
 
   const isAdmin = localStorage.getItem('isAdmin') === 'true';
   const username = localStorage.getItem('username');
@@ -96,9 +95,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadPreferences = async () => {
       try {
-        const response = await apiService.get('/preferences');
-        if (response.data) {
-          setAvatarSeed(response.data.avatar_seed);
+        const preferences = await apiService.getPreferences();
+        if (preferences) {
+          setAvatarSeed(preferences.avatar_seed);
         }
       } catch (error) {
         console.error('Failed to load preferences:', error);

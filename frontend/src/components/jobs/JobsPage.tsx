@@ -208,7 +208,7 @@ export function JobsPage() {
 
     return (
       matchesSearch &&
-      (!filters.username || job.submitted_by.toLowerCase().includes(filters.username.toLowerCase())) &&
+      (!filters.username || job.username.toLowerCase().includes(filters.username.toLowerCase())) &&
       (!filters.status || job.status === filters.status) &&
       (!filters.location || job.location === filters.location)
     );
