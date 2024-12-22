@@ -4,12 +4,14 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { MantineProvider, createTheme, MantineTheme, MantineColorScheme } from '@mantine/core'
 import { ModalsProvider } from '@mantine/modals'
+import { Notifications } from '@mantine/notifications'
 import { BrowserRouter } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import App from './App'
 import './index.css'
 import '@mantine/core/styles.css'
 import '@mantine/dates/styles.css'
+import '@mantine/notifications/styles.css'
 
 interface StyleParams {
   colorScheme: MantineColorScheme;
@@ -116,6 +118,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <BrowserRouter>
         <MantineProvider theme={theme} defaultColorScheme={getInitialColorScheme()}>
+          <Notifications position="top-right" />
           <ModalsProvider>
             <App />
           </ModalsProvider>

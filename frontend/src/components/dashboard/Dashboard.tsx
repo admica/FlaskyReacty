@@ -18,7 +18,6 @@ import {
   Modal,
   ScrollArea,
   Box,
-  Notification,
 } from '@mantine/core';
 import { DateTimePicker } from '@mantine/dates';
 import { IconAlertCircle, IconRefresh } from '@tabler/icons-react';
@@ -33,6 +32,16 @@ const debug = (message: string, data?: any) => {
     ? `[Dashboard] ${message} | ${JSON.stringify(data)}`
     : `[Dashboard] ${message}`;
   console.debug(`${timestamp} ${logMessage}`);
+};
+
+const validateIpAddress = (ip: string): boolean => {
+  if (!ip) return true; // Empty is valid as it's optional
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (!ipv4Regex.test(ip)) return false;
+  return ip.split('.').every(num => {
+    const n = parseInt(num);
+    return n >= 0 && n <= 255;
+  });
 };
 
 export function Dashboard() {
@@ -109,16 +118,62 @@ export function Dashboard() {
 
       // Validate required fields
       if (!formData.location) {
-        setError('Location is required');
+        showNotification({
+          title: 'Validation Error',
+          message: 'Location is required',
+          color: 'red'
+        });
         return;
       }
+
+      // Validate IP addresses
+      if (formData.src_ip && !validateIpAddress(formData.src_ip)) {
+        showNotification({
+          title: 'Validation Error',
+          message: 'Invalid source IP address format',
+          color: 'red'
+        });
+        return;
+      }
+
+      if (formData.dst_ip && !validateIpAddress(formData.dst_ip)) {
+        showNotification({
+          title: 'Validation Error',
+          message: 'Invalid destination IP address format',
+          color: 'red'
+        });
+        return;
+      }
+
       if (!formData.src_ip && !formData.dst_ip) {
-        setError('At least one IP address is required');
+        showNotification({
+          title: 'Validation Error',
+          message: 'At least one IP address is required',
+          color: 'red'
+        });
         return;
       }
+
+      // Validate time fields
       if (!formData.event_time && (!formData.start_time || !formData.end_time)) {
-        setError('Either Event Time or both Start Time and End Time are required');
+        showNotification({
+          title: 'Validation Error',
+          message: 'Either Event Time or both Start Time and End Time are required',
+          color: 'red'
+        });
         return;
+      }
+
+      // If using start/end time, validate end time is after start time
+      if (formData.start_time && formData.end_time) {
+        if (formData.end_time <= formData.start_time) {
+          showNotification({
+            title: 'Validation Error',
+            message: 'End Time must be after Start Time',
+            color: 'red'
+          });
+          return;
+        }
       }
 
       // Format the job data to match API expectations
@@ -139,13 +194,14 @@ export function Dashboard() {
 
       // Submit the job
       const result = await apiService.submitJob(jobData);
-      console.log('Job submitted successfully:', result);
+      debug('Job submitted successfully:', result);
       
       // Show success notification
       showNotification({
         title: 'Success',
         message: 'Job submitted successfully',
-        color: 'green'
+        color: 'green',
+        autoClose: 5000
       });
 
       // Clear form
@@ -165,7 +221,14 @@ export function Dashboard() {
 
     } catch (err: any) {
       console.error('Error submitting job:', err);
-      setError(err.message || 'Failed to submit job');
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to submit job';
+      showNotification({
+        title: 'Error',
+        message: errorMessage,
+        color: 'red',
+        autoClose: 8000
+      });
+      setError(errorMessage);
     } finally {
       setSubmitting(false);
     }
