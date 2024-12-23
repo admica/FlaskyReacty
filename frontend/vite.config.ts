@@ -4,8 +4,10 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 
-// Determine if we're in production
-const isProd = process.env.NODE_ENV === 'production';
+// Environment detection
+const isProd = process.env.NODE_ENV === 'production'
+const hostname = os.hostname()
+const isDev = process.env.NODE_ENV === 'development'
 
 export default defineConfig({
   plugins: [react()],
@@ -16,32 +18,29 @@ export default defineConfig({
     sourcemap: !isProd,
   },
   server: {
-    https: !isProd ? {
+    https: {
       key: fs.readFileSync('/opt/pcapserver/ssl/cert.key'),
       cert: fs.readFileSync('/opt/pcapserver/ssl/cert.crt'),
-    } : undefined,
+    },
     proxy: {
       '/api': {
-        target: isProd ? 'https://api.pcapserver.com' : `https://${os.hostname()}:3000`,
+        target: 'https://localhost:3000',
         changeOrigin: true,
-        secure: isProd,
+        secure: false,
       },
     },
-    port: 5173,
     host: true,
+    port: 5173,
     strictPort: true,
     hmr: {
       protocol: 'wss',
-      clientPort: 5173,
-      host: os.hostname()
+      host: isDev ? 'localhost' : hostname,
+      clientPort: 5173
     }
   },
   resolve: {
     alias: [
-      {
-        find: '@',
-        replacement: path.resolve(__dirname, 'src')
-      }
+      { find: '@', replacement: path.resolve(__dirname, 'src') }
     ]
   }
-}) 
+})

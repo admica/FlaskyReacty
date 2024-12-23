@@ -107,9 +107,7 @@ export interface JobSubmitData {
 
 // Create axios instance
 export const api = axios.create({
-  baseURL: import.meta.env.DEV 
-    ? (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1'
-    : '/api/v1',
+  baseURL: '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -133,9 +131,7 @@ const processQueue = (error: any, token: string | null = null) => {
 
 // Create a separate axios instance for refresh requests
 const refreshApi = axios.create({
-  baseURL: import.meta.env.DEV 
-    ? (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1'
-    : '/api/v1',
+  baseURL: '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
