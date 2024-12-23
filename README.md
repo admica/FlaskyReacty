@@ -128,6 +128,7 @@ python3 -m venv venv_linux
 source venv_linux/bin/activate
 
 # Install dependencies
+sudo dnf install python3-devel openldap-devel -y
 pip install --upgrade pip
 pip install -r requirements.txt
 
