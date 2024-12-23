@@ -1,52 +1,11 @@
 // PATH: src/components/sensors/SensorsPage.tsx
 
-import { useState, useEffect, useRef } from 'react';
-import { Box, Table, Title, Text, Badge, Group, Stack, Card, MultiSelect, Loader, Modal, Select, RingProgress, Tooltip, Paper, ScrollArea, ActionIcon } from '@mantine/core';
+import { useState, useEffect } from 'react';
+import { Box, Table, Title, Text, Badge, Group, Stack, Card, MultiSelect, Loader, Modal, Select, RingProgress, Tooltip, Paper, ScrollArea } from '@mantine/core';
 import { IconChevronUp, IconChevronDown, IconSelector } from '@tabler/icons-react';
 import { formatDistanceToNow, intervalToDuration } from 'date-fns';
 import apiService from '../../services/api';
-
-interface Sensor {
-  name: string;
-  fqdn: string;
-  status: string;
-  pcap_avail: number;
-  totalspace: string;
-  usedspace: string;
-  last_update: string;
-  version: string | null;
-  location: string;
-}
-
-interface ApiSensor {
-  name: string;
-  fqdn: string;
-  status: string;
-  pcap_avail: number;
-  totalspace: string;
-  usedspace: string;
-  last_update: string;
-  version?: string;
-  location: string;
-}
-
-interface ApiDevice {
-  name: string;
-  port: number;
-  type: string;
-  status: string;
-  last_checked: string;
-  runtime: number;
-  workers: number;
-  src_subnets: number;
-  dst_subnets: number;
-  uniq_subnets: number;
-  avg_idle_time: number;
-  avg_work_time: number;
-  overflows: number;
-  size: string;
-  version: string;
-}
+import type { Sensor } from '../../services/api';
 
 interface Device {
   name: string;
@@ -64,13 +23,12 @@ interface Device {
   overflows: number;
   size: string;
   version: string;
-  output_path: string;
-  proc: string;
-  stats_date: string;
+  output_path?: string;
+  proc?: string;
+  stats_date?: string;
 }
 
 interface DebugMessage {
-  id: number;
   message: string;
   timestamp: string;
 }
@@ -81,18 +39,16 @@ export function SensorsPage() {
   const [sensors, setSensors] = useState<Sensor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortField>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedSensor, setSelectedSensor] = useState<string | null>(null);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [loadingDevices, setLoadingDevices] = useState(false);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState<string>('30');
   const [refreshProgress, setRefreshProgress] = useState(100);
-  const [showDebug, setShowDebug] = useState(false);
-  const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
-  const messageIdCounter = useRef(0);
 
   // Get unique statuses and locations for filters
   const uniqueStatuses = [...new Set(sensors.map(s => s.status))];
@@ -101,7 +57,6 @@ export function SensorsPage() {
   const addDebugMessage = (message: string) => {
     setDebugMessages(prev => {
       const updatedMessages = [...prev.slice(-99), {
-        id: messageIdCounter.current++,
         timestamp: new Date().toISOString(),
         message
       }];
@@ -255,15 +210,16 @@ export function SensorsPage() {
 
   const sortedSensors = [...filteredSensors].sort((a, b) => {
     let comparison = 0;
-    
-    if (sortBy === 'pcap_avail') {
-      comparison = parseInt(a[sortBy]) - parseInt(b[sortBy]);
-    } else if (sortBy === 'usedspace') {
-      comparison = parseInt(a[sortBy]) - parseInt(b[sortBy]);
+
+    if (sortBy === 'pcap_avail' || sortBy === 'usedspace') {
+      // Parse as numbers, removing any non-numeric characters
+      const aValue = parseInt(String(a[sortBy]).replace(/\D/g, '') || '0');
+      const bValue = parseInt(String(b[sortBy]).replace(/\D/g, '') || '0');
+      comparison = aValue - bValue;
     } else {
       comparison = String(a[sortBy]).localeCompare(String(b[sortBy]));
     }
-    
+
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
@@ -321,23 +277,22 @@ export function SensorsPage() {
     return parts.join(', ') + ' ago';
   };
 
-  const formatPcapAvailable = (pcap: string) => {
-    // If it's "0" or not a number, return as is
-    if (pcap === "0" || isNaN(parseInt(pcap))) {
-      return pcap;
+  const formatPcapAvailable = (pcap: number) => {
+    // If it's 0 or not a number, return as string
+    if (pcap === 0 || isNaN(pcap)) {
+      return String(pcap);
     }
 
     // Convert minutes to a duration
-    const minutes = parseInt(pcap);
-    const duration = intervalToDuration({ start: 0, end: minutes * 60 * 1000 });
+    const duration = intervalToDuration({ start: 0, end: pcap * 60 * 1000 });
     const { days, hours, minutes: mins } = duration;
-    
-    const parts: string[] = [];
-    if (days) parts.push(`${days} ${days === 1 ? 'day' : 'days'}`);
-    if (hours) parts.push(`${hours} ${hours === 1 ? 'hour' : 'hours'}`);
-    if (mins) parts.push(`${mins} mins`);
-    
-    return parts.join(', ');
+
+    // Format the duration
+    const parts = [];
+    if (days) parts.push(`${days}d`);
+    if (hours) parts.push(`${hours}h`);
+    if (mins) parts.push(`${mins}m`);
+    return parts.join(' ') || '0m';
   };
 
   const getStoragePercentage = (used: string): number => {
@@ -621,76 +576,34 @@ export function SensorsPage() {
         )}
       </Modal>
 
-      {/* Debug Messages Overlay */}
-      {showDebug && (
-        <Paper
-          style={{
-            position: 'fixed',
-            bottom: 20,
-            right: 20,
-            zIndex: 1000,
-            width: '400px',
-            maxHeight: '300px',
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(4px)',
-          }}
-        >
-          <Stack gap="xs" p="xs">
-            <Group justify="space-between">
-              <Text size="xs" fw={500} c="dimmed">Debug Log ({debugMessages.length} messages)</Text>
-              <Group gap="xs">
-                <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
-                <ActionIcon 
-                  size="xs" 
-                  variant="subtle" 
-                  color="gray" 
-                  onClick={() => setShowDebug(false)}
-                >
-                  ×
-                </ActionIcon>
-              </Group>
-            </Group>
-            <ScrollArea h={250} scrollbarSize={8}>
-              <Stack gap={4}>
-                {debugMessages.map(msg => (
-                  <Text 
-                    key={msg.id} 
-                    size="xs"
-                    style={{ 
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      lineHeight: 1.2,
-                      userSelect: 'text'
-                    }}
-                  >
-                    <Text span c="dimmed" size="xs" style={{ userSelect: 'text' }}>
-                      [{new Date(msg.timestamp).toLocaleTimeString()}]
-                    </Text>{' '}
-                    {msg.message}
-                  </Text>
-                ))}
-              </Stack>
-            </ScrollArea>
-          </Stack>
-        </Paper>
-      )}
-
-      {/* Debug Trigger Area */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          right: 0,
-          width: '100px',
-          height: '100px',
-          zIndex: 999,
-          cursor: 'default'
+      {/* Debug Messages */}
+      <Paper 
+        withBorder 
+        p="xs" 
+        style={{ 
+          position: 'fixed', 
+          bottom: '1rem', 
+          right: '1rem', 
+          width: '300px',
+          maxHeight: '200px',
+          overflowY: 'auto',
+          zIndex: 1000,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)'
         }}
-        onMouseEnter={() => {
-          console.log('Debug area hover');
-          setShowDebug(true);
-        }}
-      />
+      >
+        <ScrollArea>
+          {debugMessages.map((msg) => (
+            <Text
+              key={msg.timestamp}
+              size="xs"
+              c="dimmed"
+              style={{ whiteSpace: 'pre-wrap' }}
+            >
+              [{msg.timestamp}] {msg.message}
+            </Text>
+          ))}
+        </ScrollArea>
+      </Paper>
     </Box>
   );
 } 

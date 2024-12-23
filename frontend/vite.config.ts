@@ -4,20 +4,6 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 
-// Get the host's network interfaces
-const getHostIp = () => {
-  const interfaces = os.networkInterfaces();
-  for (const iface of Object.values(interfaces)) {
-    if (!iface) continue;
-    for (const alias of iface) {
-      if (alias.family === 'IPv4' && !alias.internal) {
-        return alias.address;
-      }
-    }
-  }
-  return 'localhost';
-};
-
 // Determine if we're in production
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -36,19 +22,19 @@ export default defineConfig({
     } : undefined,
     proxy: {
       '/api': {
-        target: isProd ? 'https://api.pcapserver.com' : 'https://localhost:3000',
+        target: isProd ? 'https://api.pcapserver.com' : `https://${os.hostname()}:3000`,
         changeOrigin: true,
         secure: isProd,
       },
     },
     port: 5173,
-    host: '0.0.0.0',
+    host: true,
     strictPort: true,
-    hmr: !isProd ? {
+    hmr: {
       protocol: 'wss',
-      host: getHostIp(),
-      clientPort: 5173
-    } : undefined
+      clientPort: 5173,
+      host: os.hostname()
+    }
   },
   resolve: {
     alias: [
