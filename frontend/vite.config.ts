@@ -3,7 +3,10 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import fs from 'fs'
 
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+// Only disable SSL verification in development
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+}
 
 export default defineConfig({
   plugins: [react()],
@@ -13,10 +16,10 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    https: {
+    https: process.env.NODE_ENV !== 'production' ? {
       key: fs.readFileSync('/opt/pcapserver/ssl/cert.key'),
       cert: fs.readFileSync('/opt/pcapserver/ssl/cert.crt'),
-    },
+    } : false,
     proxy: {
       '/api/v1': {
         target: 'https://localhost:3000',
