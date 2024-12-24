@@ -177,6 +177,20 @@ class SensorMonitor:
         logger.debug(f"Monitor intervals: status={self.status_check_interval}s, info={self.info_update_interval}s")
         #logger.debug(f"Using pcapCtrl at: {self.pcap_ctrl}")
 
+        self.ssh_keys = []
+        if 'SSH' in self.config:
+            self.ssh_keys = [v for k, v in self.config['SSH'].items() if k.startswith('pubkey')]
+        for key in self.ssh_keys:
+            logger.debug(f'Added primary SSH pubkey: {key}')
+
+        ssh_dir = os.path.expanduser('~/.ssh')
+        if os.path.exists(ssh_dir):
+            for f in os.listdir(ssh_dir):
+                if f.endswith('.pub'):
+                    key = os.path.join(ssh_dir, f)
+                    if key not in self.ssh_keys:
+                        self.ssh_keys.append(key)
+                        logger.debug(f'Added fallback SSH pubkey: {key}')
         self.running = True
 
     def run(self):
@@ -295,30 +309,46 @@ class SensorMonitor:
                 # Connect to sensor
                 ssh = paramiko.SSHClient()
                 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                ssh.connect(
-                    sensor_fqdn,
-                    username=self.config.get("SSH", "username", fallback="pcapuser"),
-                    key_filename=self.config.get("SSH", "pubkey"),
-                    timeout=self.config.getint("SSH", "timeout", fallback=10)
-                )
+                flag_not_connected = True
+                for pubkey in self.ssh_keys:
+                    try:
+                        logger.debug(f'SSH {sensor_fqdn} using pubkey: {pubkey}')
+                        u = self.config.get("SSH", "username", fallback="pcapuser")
+                        k = self.config.get("SSH", "pubkey")
+                        t = self.config.getint("SSH", "timeout", fallback=10)
+                        logger.warning(f'username={u}, key_filename={k}, timeout={t}')
+                        ssh.connect(sensor_fqdn, username=u, key_filename=k, timeout=t)
+                        logger.info(f'SSH {sensor_fqdn} established with pubkey: {pubkey}')
+                        flag_not_connected = False # Drop flag now that we're connected
+                        break
+                    except ZeroDivisionError: #Exception as e:
+                        logger.info(f'SSH {sensor_fqdn} failed with pubkey: {pubkey}')
+                if flag_not_connected:
+                    logger.error(f'No SSH connection to {sensor_fqdn}')
+                    raise
 
                 # Run both commands in one SSH session
-                cmd = "/opt/autopcap_client/latest/agent.py -e -O /var/tmp/autopcap/agent/ && echo '---SEPARATOR---' && df -hP /pcap | tail -1 | awk '{print $2,$5}'"
+                cmd = "/opt/autopcap_client/latest/agent.py -e -O /var/tmp/autopcap/agent/ && echo '---SEP---' && df -hP /pcap | tail -1 | awk '{print $2,$5}'"
                 _, stdout, stderr = ssh.exec_command(cmd)
                 output = stdout.read().decode().strip()
-
+                agent_out = stderr.read().decode().strip()
                 if not output:
                     output = stderr.read().decode().strip()
                     logger.warning(f"No output from agent.py/df commands: {output}")
                 else:
                     # Split output into agent and df parts
-                    parts = output.split('---SEPARATOR---')
-                    if len(parts) == 2:
-                        agent_output = parts[0].strip()
+                    parts = output.split('---SEP---')
+                    if len(parts) < 2:
+                        logger.warning("Not enough output to parse")
+                    elif len(parts) >= 2:
+                        agent_output = parts[0].strip() # Set as fallback if agent ever gets updated
+                        if len(agent_out) > 0: # If there was stderr, it was agent output
+                            agent_output = agent_out
                         df_output = parts[1].strip()
 
                         # Parse agent.py output - expect AGENT_MINUTES_OF_PCAP_AVAILABLE format
                         if agent_output:
+                            logger.warning(f'--- agent_output=[{agent_output}]')
                             try:
                                 for line in agent_output.split('\n'):
                                     if line.startswith('AGENT_MINUTES_OF_PCAP_AVAILABLE'):
@@ -329,6 +359,7 @@ class SensorMonitor:
 
                         # Parse df output
                         if df_output:
+                            logger.warning(f'--- df_output=[{df_output}]')
                             try:
                                 total, used = df_output.split()
                                 device_stats['totalspace'] = total
@@ -343,7 +374,7 @@ class SensorMonitor:
                 ssh.close()
 
             # Get source subnets (command 4,0)
-            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 4,0"
+            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 4,10"
             logger.debug(f"Running command: {cmd}")
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
@@ -365,7 +396,7 @@ class SensorMonitor:
                 logger.debug(f"Parsed {len(device_stats['subnet_data']['src_subnets'])} source subnets")
 
             # Get destination subnets (command 5,0)
-            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 5,0"
+            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 5,10"
             logger.debug(f"Running command: {cmd}")
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
@@ -467,11 +498,7 @@ class SensorMonitor:
         logger.debug(f"Checking status for sensor {sensor_fqdn}")
         try:
             # Try to ping the sensor first
-            result = subprocess.run(
-                ["ping", "-c", "1", "-W", "2", sensor_fqdn],
-                capture_output=True,
-                text=True
-            )
+            result = subprocess.run(["ping", "-c", "1", "-W", "2", sensor_fqdn], capture_output=True, text=True)
 
             if result.returncode != 0:
                 logger.debug(f"Ping failed for {sensor_fqdn}")
@@ -484,7 +511,6 @@ class SensorMonitor:
                 ssh.connect(
                     sensor_fqdn,
                     username=self.config.get("SSH", "username", fallback="pcapuser"),
-                    key_filename=self.config.get("SSH", "pubkey"),
                     timeout=self.config.getint("SSH", "timeout", fallback=10)
                 )
                 # Combine agent.py check and disk space check into single command
