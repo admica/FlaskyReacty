@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 import traceback
 import psutil
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from partition_manager import manage_time_partitions
 import threading
 from simpleLogger import SimpleLogger
@@ -254,6 +254,35 @@ class SensorMonitor:
                 logger.error(f"Error in maintenance tasks: {e}")
             time.sleep(3600)  # Run maintenance hourly
 
+    def establish_ssh_connection(self, sensor_fqdn: str) -> Tuple[paramiko.SSHClient, bool]:
+        """Establish SSH connection to a sensor using configured and fallback keys.
+
+        Args:
+            sensor_fqdn: The sensor's fully qualified domain name
+
+        Returns:
+            Tuple of (SSHClient object, bool indicating if connection was successful)
+        """
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # Get SSH configuration
+        username = self.config.get("SSH", "username", fallback="pcapuser")
+        timeout = self.config.getint("SSH", "timeout", fallback=10)
+
+        # Try each SSH key in order
+        for pubkey in self.ssh_keys:
+            try:
+                logger.debug(f'SSH {sensor_fqdn} using pubkey: {pubkey}')
+                ssh.connect(sensor_fqdn, username=username, key_filename=pubkey, timeout=timeout)
+                logger.info(f'SSH {sensor_fqdn} established with pubkey: {pubkey}')
+                return ssh, True
+            except Exception as e:
+                logger.info(f'SSH {sensor_fqdn} failed with pubkey: {pubkey}')
+
+        logger.error(f'No SSH connection to {sensor_fqdn}')
+        return ssh, False
+
     def get_device_stats(self, sensor_fqdn: str, port: int) -> Dict[str, Any]:
         """Get device statistics using pcapCtrl"""
         logger.debug(f"Getting device stats for {sensor_fqdn}:{port}")
@@ -307,25 +336,9 @@ class SensorMonitor:
 
             try:
                 # Connect to sensor
-                ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                flag_not_connected = True
-                for pubkey in self.ssh_keys:
-                    try:
-                        logger.debug(f'SSH {sensor_fqdn} using pubkey: {pubkey}')
-                        u = self.config.get("SSH", "username", fallback="pcapuser")
-                        k = self.config.get("SSH", "pubkey")
-                        t = self.config.getint("SSH", "timeout", fallback=10)
-                        logger.warning(f'username={u}, key_filename={k}, timeout={t}')
-                        ssh.connect(sensor_fqdn, username=u, key_filename=k, timeout=t)
-                        logger.info(f'SSH {sensor_fqdn} established with pubkey: {pubkey}')
-                        flag_not_connected = False # Drop flag now that we're connected
-                        break
-                    except ZeroDivisionError: #Exception as e:
-                        logger.info(f'SSH {sensor_fqdn} failed with pubkey: {pubkey}')
-                if flag_not_connected:
-                    logger.error(f'No SSH connection to {sensor_fqdn}')
-                    raise
+                ssh, connected = self.establish_ssh_connection(sensor_fqdn)
+                if not connected:
+                    raise Exception("Failed to establish SSH connection")
 
                 # Run both commands in one SSH session
                 cmd = "/opt/autopcap_client/latest/agent.py -e -O /var/tmp/autopcap/agent/ && echo '---SEP---' && df -hP /pcap | tail -1 | awk '{print $2,$5}'"
@@ -505,14 +518,11 @@ class SensorMonitor:
                 return 'Offline'
 
             # If ping succeeds, try SSH checks
-            ssh = paramiko.SSHClient()
-            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh, connected = self.establish_ssh_connection(sensor_fqdn)
+            if not connected:
+                return 'Degraded'
+
             try:
-                ssh.connect(
-                    sensor_fqdn,
-                    username=self.config.get("SSH", "username", fallback="pcapuser"),
-                    timeout=self.config.getint("SSH", "timeout", fallback=10)
-                )
                 # Combine agent.py check and disk space check into single command
                 cmd = "pgrep -f 'agent.py' >/dev/null && df -h /opt/pcapserver | tail -n1 | awk '{print $4,$5}'"
                 _, stdout, _ = ssh.exec_command(cmd, timeout=5)
