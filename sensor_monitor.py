@@ -344,45 +344,32 @@ class SensorMonitor:
                 if not connected:
                     raise Exception("Failed to establish SSH connection")
 
-                # Run both commands in one SSH session
-                cmd = "/opt/autopcap_client/latest/agent.py -e -O /var/tmp/autopcap/agent/ && echo '---SEP---' && df -hP /pcap | tail -1 | awk '{print $2,$5}'"
+                # Run commands in one SSH session
+                cmd = "/opt/autopcap_client/latest/agent.py -e -O /var/tmp/autopcap/agent/ && df -hP /pcap | tail -1 | awk '{print $2,$5}'"
                 _, stdout, stderr = ssh.exec_command(cmd)
-                output = stdout.read().decode().strip()
-                agent_out = stderr.read().decode().strip()
-                if not output:
-                    output = stderr.read().decode().strip()
-                    logger.warning(f"No output from agent.py/df commands: {output}")
-                else:
-                    # Split output into agent and df parts
-                    parts = output.split('---SEP---')
-                    if len(parts) < 2:
-                        logger.warning("Not enough output to parse")
-                    elif len(parts) >= 2:
-                        agent_output = parts[0].strip() # Set as fallback if agent ever gets updated
-                        if len(agent_out) > 0: # If there was stderr, it was agent output
-                            agent_output = agent_out
-                        df_output = parts[1].strip()
 
-                        # Parse agent.py output - expect AGENT_MINUTES_OF_PCAP_AVAILABLE format
-                        if agent_output:
-                            logger.warning(f'--- agent_output=[{agent_output}]')
-                            try:
-                                for line in agent_output.split('\n'):
-                                    if line.startswith('AGENT_MINUTES_OF_PCAP_AVAILABLE'):
-                                        device_stats['pcap_avail'] = int(line.split(' ')[1])
-                                        break
-                            except (ValueError, IndexError) as e:
-                                logger.error(f"Error parsing agent.py output: {e}")
+                # agent.py output is in stderr
+                agent_output = stderr.read().decode().strip()
+                if agent_output:
+                    logger.warning(f'--- agent_output=[{agent_output}]')
+                    try:
+                        for line in agent_output.split('\n'):
+                            if line.startswith('AGENT_MINUTES_OF_PCAP_AVAILABLE'):
+                                device_stats['pcap_avail'] = int(line.split(' ')[1])
+                                break
+                    except (ValueError, IndexError) as e:
+                        logger.error(f"Error parsing agent.py output: {e}")
 
-                        # Parse df output
-                        if df_output:
-                            logger.warning(f'--- df_output=[{df_output}]')
-                            try:
-                                total, used = df_output.split()
-                                device_stats['totalspace'] = total
-                                device_stats['usedspace'] = used
-                            except ValueError as e:
-                                logger.error(f"Error parsing df output '{df_output}': {e}")
+                # df command output is in stdout
+                df_output = stdout.read().decode().strip()
+                if df_output:
+                    logger.warning(f'--- df_output=[{df_output}]')
+                    try:
+                        total, used = df_output.split()
+                        device_stats['totalspace'] = total
+                        device_stats['usedspace'] = used
+                    except ValueError as e:
+                        logger.error(f"Error parsing df output '{df_output}': {e}")
 
             except Exception as e:
                 logger.error(f"SSH connection failed: {e}")
@@ -532,18 +519,21 @@ class SensorMonitor:
                 # Combine agent.py check and disk space check into single command
                 cmd = "pgrep -f 'agent.py' >/dev/null && df -h /opt/pcapserver | tail -n1 | awk '{print $4,$5}'"
                 _, stdout, stderr = ssh.exec_command(cmd, timeout=5)
-                output = stdout.read().decode().strip()
-                agent_out = stderr.read().decode().strip()
 
-                # If there's no stdout but we have stderr, use that (agent.py output comes on stderr)
-                if not output and agent_out:
-                    output = agent_out
-                elif not output:  # No output at all
+                # Check stderr first - if agent.py isn't running, command will fail
+                agent_error = stderr.read().decode().strip()
+                if agent_error:
                     logger.debug(f"agent.py not running on {sensor_fqdn}")
                     return 'Degraded'
 
+                # If we get here, agent.py is running, check df output
+                df_output = stdout.read().decode().strip()
+                if not df_output:
+                    logger.debug(f"No disk space info from {sensor_fqdn}")
+                    return 'Degraded'
+
                 try:
-                    avail, used_pct = output.split()
+                    avail, used_pct = df_output.split()
                     used_pct = int(used_pct.rstrip('%'))
 
                     if used_pct >= 90:  # High disk usage
@@ -552,7 +542,7 @@ class SensorMonitor:
 
                     return 'Online'
                 except (ValueError, IndexError) as e:
-                    logger.error(f"Error parsing disk space output '{output}': {e}")
+                    logger.error(f"Error parsing disk space output '{df_output}': {e}")
                     return 'Degraded'
 
             except Exception as e:
