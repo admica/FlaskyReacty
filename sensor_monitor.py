@@ -531,10 +531,14 @@ class SensorMonitor:
             try:
                 # Combine agent.py check and disk space check into single command
                 cmd = "pgrep -f 'agent.py' >/dev/null && df -h /opt/pcapserver | tail -n1 | awk '{print $4,$5}'"
-                _, stdout, _ = ssh.exec_command(cmd, timeout=5)
+                _, stdout, stderr = ssh.exec_command(cmd, timeout=5)
                 output = stdout.read().decode().strip()
+                agent_out = stderr.read().decode().strip()
 
-                if not output:  # agent.py not running
+                # If there's no stdout but we have stderr, use that (agent.py output comes on stderr)
+                if not output and agent_out:
+                    output = agent_out
+                elif not output:  # No output at all
                     logger.debug(f"agent.py not running on {sensor_fqdn}")
                     return 'Degraded'
 
