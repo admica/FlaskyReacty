@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 import traceback
 import psutil
 import json
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 from partition_manager import manage_time_partitions
 import threading
 from simpleLogger import SimpleLogger
@@ -105,7 +105,7 @@ class ProcessingSummary:
             logger.error(f"Error saving health summary: {e}")
             raise
 
-    def get_summary_record(self):
+def get_summary_record(self):
         """Generate the database record for this monitoring run."""
         end_time = datetime.now(timezone.utc)
         if end_time <= self.start_time:
@@ -169,24 +169,20 @@ class SensorMonitor:
             'user': self.config['DB']['username'],
             'password': self.config['DB']['password']
         }
-        #logger.debug(f"Database parameters: host={self.db_params['host']}, db={self.db_params['database']}, user={self.db_params['user']}")
 
         self.status_check_interval = self.config.getint('MONITOR', 'status_check_interval', fallback=60)
         self.info_update_interval = self.config.getint('MONITOR', 'info_update_interval', fallback=300)
         self.pcap_ctrl = self.config.get('SENSOR', 'pcapCtrl', fallback='/opt/pcapserver/bin/pcapCtrl')
-        # Get subnet limits from config, 0 means no limit
-        self.src_subnet_limit = self.config.getint('SENSOR', 'src_subnet_limit', fallback=0)
-        self.dst_subnet_limit = self.config.getint('SENSOR', 'dst_subnet_limit', fallback=0)
         logger.debug(f"Monitor intervals: status={self.status_check_interval}s, info={self.info_update_interval}s")
-        logger.debug(f"Subnet limits: src={self.src_subnet_limit}, dst={self.dst_subnet_limit}")
-        #logger.debug(f"Using pcapCtrl at: {self.pcap_ctrl}")
 
+        # Initialize SSH keys list
         self.ssh_keys = []
         if 'SSH' in self.config:
             self.ssh_keys = [v for k, v in self.config['SSH'].items() if k.startswith('pubkey')]
-        for key in self.ssh_keys:
-            logger.debug(f'Added primary SSH pubkey: {key}')
+            for key in self.ssh_keys:
+                logger.debug(f'Added primary SSH pubkey: {key}')
 
+        # Add fallback SSH keys from ~/.ssh
         ssh_dir = os.path.expanduser('~/.ssh')
         if os.path.exists(ssh_dir):
             for f in os.listdir(ssh_dir):
@@ -195,6 +191,7 @@ class SensorMonitor:
                     if key not in self.ssh_keys:
                         self.ssh_keys.append(key)
                         logger.debug(f'Added fallback SSH pubkey: {key}')
+
         self.running = True
 
     def run(self):
@@ -258,178 +255,6 @@ class SensorMonitor:
                 logger.error(f"Error in maintenance tasks: {e}")
             time.sleep(3600)  # Run maintenance hourly
 
-    def establish_ssh_connection(self, sensor_fqdn: str) -> Tuple[paramiko.SSHClient, bool]:
-        """Establish SSH connection to a sensor using configured and fallback keys.
-
-        Args:
-            sensor_fqdn: The sensor's fully qualified domain name
-
-        Returns:
-            Tuple of (SSHClient object, bool indicating if connection was successful)
-        """
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        # Get SSH configuration
-        username = self.config.get("SSH", "username", fallback="pcapuser")
-        timeout = self.config.getint("SSH", "timeout", fallback=10)
-
-        # Try each SSH key in order
-        for pubkey in self.ssh_keys:
-            try:
-                logger.debug(f'SSH {sensor_fqdn} using pubkey: {pubkey}')
-                ssh.connect(sensor_fqdn, username=username, key_filename=pubkey, timeout=timeout)
-                logger.info(f'SSH {sensor_fqdn} established with pubkey: {pubkey}')
-                return ssh, True
-            except Exception as e:
-                logger.info(f'SSH {sensor_fqdn} failed with pubkey: {pubkey}')
-
-        logger.error(f'No SSH connection to {sensor_fqdn}')
-        return ssh, False
-
-    def get_device_stats(self, sensor_fqdn: str, port: int) -> Dict[str, Any]:
-        """Get device statistics using pcapCtrl"""
-        logger.debug(f"Getting device stats for {sensor_fqdn}:{port}")
-        try:
-            # Get basic device stats (command 0)
-            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 0"
-            logger.debug(f"Running command: {cmd}")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-            if result.returncode != 0:
-                logger.error(f"pcapCtrl command failed: {result.stderr}")
-                device_stats = self._create_offline_device_stats()
-                device_stats['error'] = f"pcapCtrl command failed: {result.stderr}"
-                return device_stats
-
-            # Parse JSON response
-            try:
-                stats = json.loads(result.stdout)
-                logger.debug(f"Raw device stats: {stats}")
-
-                # Convert location to uppercase if present
-                if 'Location' in stats: stats['Location'] = stats['Location'].upper()
-
-            except json.JSONDecodeError:
-                logger.error(f"Invalid JSON from pcapCtrl: {result.stdout}")
-                device_stats = self._create_offline_device_stats()
-                device_stats['error'] = f"Invalid JSON response: {result.stdout}"
-                return device_stats
-
-            # Convert stats to our format
-            device_stats = {
-                'status': 'Online' if stats.get('Runtime') and int(stats.get('Runtime', 0)) > 0 else 'Offline',
-                'runtime': int(stats.get('Runtime', 0)),
-                'workers': int(stats.get('Workers', 0)),
-                'src_subnets': int(stats.get('SrcSubnets', 0)),
-                'dst_subnets': int(stats.get('DstSubnets', 0)),
-                'uniq_subnets': int(stats.get('UniqSubnets', 0)),
-                'avg_idle_time': int(stats.get('AvgIdleTime', 0)),
-                'avg_work_time': int(stats.get('AvgWorkTime', 0)),
-                'overflows': int(stats.get('Overflows', 0)),
-                'size': stats.get('Size', '0'),
-                'version': stats.get('Version'),
-                'output_path': stats.get('Output_path', '/pcap/'),
-                'proc': stats.get('Proc', ''),
-                'stats_date': datetime.fromtimestamp(int(stats.get('Date', time.time())), timezone.utc),
-                'pcap_avail': 0,  # Will be updated below
-                'totalspace': 'n/a',  # Will be updated below
-                'usedspace': 'n/a',  # Will be updated below
-                'subnet_data': {'src_subnets': [], 'dst_subnets': []}
-            }
-
-            try:
-                # Connect to sensor
-                ssh, connected = self.establish_ssh_connection(sensor_fqdn)
-                if not connected:
-                    raise Exception("Failed to establish SSH connection")
-
-                # Run commands in one SSH session
-                cmd = "/opt/autopcap_client/latest/agent.py -e -O /var/tmp/autopcap/agent/ && df -hP /pcap | tail -1 | awk '{print $2,$5}'"
-                _, stdout, stderr = ssh.exec_command(cmd)
-
-                # agent.py output is in stderr
-                agent_output = stderr.read().decode().strip()
-                if agent_output:
-                    logger.warning(f'--- agent_output=[{agent_output}]')
-                    try:
-                        for line in agent_output.split('\n'):
-                            if line.startswith('AGENT_MINUTES_OF_PCAP_AVAILABLE'):
-                                device_stats['pcap_avail'] = int(line.split(' ')[1])
-                                break
-                    except (ValueError, IndexError) as e:
-                        logger.error(f"Error parsing agent.py output: {e}")
-
-                # df command output is in stdout
-                df_output = stdout.read().decode().strip()
-                if df_output:
-                    logger.warning(f'--- df_output=[{df_output}]')
-                    try:
-                        total, used = df_output.split()
-                        device_stats['totalspace'] = total
-                        device_stats['usedspace'] = used
-                    except ValueError as e:
-                        logger.error(f"Error parsing df output '{df_output}': {e}")
-
-            except Exception as e:
-                logger.error(f"SSH connection failed: {e}")
-                # Don't change status - keep what pcapCtrl reported
-            finally:
-                ssh.close()
-
-            # Get source subnets (command 4,0)
-            src_limit_param = f",{self.src_subnet_limit}" if self.src_subnet_limit > 0 else ",0"
-            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 4{src_limit_param}"
-            logger.debug(f"Running command: {cmd}")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-            if result.returncode == 0:
-                # Parse CSV-like response: "4,5,0,1.2.3.0,22579913668,1732655292,..."
-                parts = result.stdout.strip().split(',')
-                logger.debug(f"Source subnet response: {parts}")
-                if len(parts) > 3:  # Has subnet data
-                    # Skip first 3 fields (4,count,0)
-                    for i in range(3, len(parts), 3):
-                        if i + 2 < len(parts):
-                            # Add /24 to subnet if not present
-                            subnet = parts[i] if parts[i].endswith('/24') else f"{parts[i]}/24"
-                            device_stats['subnet_data']['src_subnets'].append({
-                                'subnet': subnet,
-                                'count': int(parts[i+1]),
-                                'timestamp': int(parts[i+2])
-                            })
-                logger.debug(f"Parsed {len(device_stats['subnet_data']['src_subnets'])} source subnets")
-
-            # Get destination subnets (command 5,0)
-            dst_limit_param = f",{self.dst_subnet_limit}" if self.dst_subnet_limit > 0 else ",0"
-            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 5{dst_limit_param}"
-            logger.debug(f"Running command: {cmd}")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-
-            if result.returncode == 0:
-                # Parse CSV-like response: "5,3,0,10.10.10.0,25206697403,1732655471,..."
-                parts = result.stdout.strip().split(',')
-                logger.debug(f"Destination subnet response: {parts}")
-                if len(parts) > 3:  # Has subnet data
-                    # Skip first 3 fields (5,count,0)
-                    for i in range(3, len(parts), 3):
-                        if i + 2 < len(parts):
-                            # Add /24 to subnet if not present
-                            subnet = parts[i] if parts[i].endswith('/24') else f"{parts[i]}/24"
-                            device_stats['subnet_data']['dst_subnets'].append({
-                                'subnet': subnet,
-                                'count': int(parts[i+1]),
-                                'timestamp': int(parts[i+2])
-                            })
-                logger.debug(f"Parsed {len(device_stats['subnet_data']['dst_subnets'])} destination subnets")
-
-            return device_stats
-
-        except Exception as e:
-            logger.error(f"Error getting device stats: {e}")
-            logger.error(traceback.format_exc())
-            return self._create_offline_device_stats()
-
     def _create_offline_device_stats(self) -> Dict[str, Any]:
         """Create a default stats dictionary for offline devices"""
         return {
@@ -453,6 +278,171 @@ class SensorMonitor:
             'subnet_data': {'src_subnets': [], 'dst_subnets': []},
             'error': None
         }
+
+    def get_device_stats(self, sensor_fqdn: str, port: int) -> Dict[str, Any]:
+        """Get device statistics"""
+        logger.debug(f"Getting device stats for {sensor_fqdn}:{port}")
+
+        device_stats = self._create_offline_device_stats()
+
+        try:
+            # First get basic device stats (command 0)
+            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 0"
+            logger.debug(f"Running command: {cmd}")
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                logger.error(f"pcapCtrl command failed: {result.stderr}")
+                device_stats['error'] = f"pcapCtrl command failed: {result.stderr}"
+                return device_stats
+
+            # Parse JSON response
+            try:
+                stats = json.loads(result.stdout)
+                logger.debug(f"Raw device stats: {stats}")
+
+                if 'Location' in stats: stats['Location'] = stats['Location'].upper()
+
+            except json.JSONDecodeError:
+                logger.error(f"Invalid JSON from pcapCtrl: {result.stdout}")
+                device_stats['error'] = f"Invalid JSON response: {result.stdout}"
+                return device_stats
+
+            # Convert stats to our format
+            device_stats.update({
+                'status': 'Online' if stats.get('Runtime') and int(stats.get('Runtime', 0)) > 0 else 'Offline',
+                'runtime': int(stats.get('Runtime', 0)),
+                'workers': int(stats.get('Workers', 0)),
+                'src_subnets': int(stats.get('SrcSubnets', 0)),
+                'dst_subnets': int(stats.get('DstSubnets', 0)),
+                'uniq_subnets': int(stats.get('UniqSubnets', 0)),
+                'avg_idle_time': int(stats.get('AvgIdleTime', 0)),
+                'avg_work_time': int(stats.get('AvgWorkTime', 0)),
+                'overflows': int(stats.get('Overflows', 0)),
+                'size': stats.get('Size', '0'),
+                'version': stats.get('Version'),
+                'output_path': stats.get('Output_path', '/pcap/'),
+                'proc': stats.get('Proc', ''),
+                'stats_date': datetime.fromtimestamp(int(stats.get('Date', time.time())), timezone.utc),
+                'subnet_data': {'src_subnets': [], 'dst_subnets': []}
+            })
+
+            # Now do all SSH operations in one block with proper cleanup
+            ssh = None
+            try:
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+                # Try each SSH key until one works
+                connected = False
+                for pubkey in self.ssh_keys:
+                    try:
+                        logger.debug(f'SSH {sensor_fqdn} using pubkey: {pubkey}')
+                        ssh.connect(
+                            sensor_fqdn,
+                            username=self.config.get("SSH", "username", fallback="pcapuser"),
+                            key_filename=pubkey,
+                            timeout=self.config.getint("SSH", "timeout", fallback=10)
+                        )
+                        logger.info(f'SSH {sensor_fqdn} established with pubkey: {pubkey}')
+                        connected = True
+                        break
+                    except Exception as e:
+                        logger.debug(f'SSH {sensor_fqdn} failed with pubkey: {pubkey} - {str(e)}')
+                        continue
+
+                if not connected:
+                    raise Exception("Failed to connect with any SSH key")
+
+                # Run both agent check and disk space commands in one session
+                cmd = "/opt/autopcap_client/latest/agent.py -e -O /var/tmp/autopcap/agent/ && echo '---SEP---' && df -hP /pcap | tail -1 | awk '{print $2,$5}'"
+                _, stdout, stderr = ssh.exec_command(cmd)
+                output = stdout.read().decode().strip()
+                agent_out = stderr.read().decode().strip()  # Agent.py outputs to stderr by design
+
+                # Process the output
+                if output:
+                    parts = output.split('---SEP---')
+                    if len(parts) >= 2:
+                        agent_output = parts[0].strip()
+                        if agent_out:  # Use stderr if present for agent.py output
+                            agent_output = agent_out
+                        df_output = parts[1].strip()
+
+                        # Parse agent.py output
+                        if agent_output:
+                            logger.debug(f'Agent output: [{agent_output}]')
+                            for line in agent_output.split('\n'):
+                                if line.startswith('AGENT_MINUTES_OF_PCAP_AVAILABLE'):
+                                    device_stats['pcap_avail'] = int(line.split(' ')[1])
+                                    break
+
+                        # Parse df output
+                        if df_output:
+                            logger.debug(f'DF output: [{df_output}]')
+                            try:
+                                total, used = df_output.split()
+                                device_stats['totalspace'] = total
+                                device_stats['usedspace'] = used
+                            except ValueError as e:
+                                logger.error(f"Error parsing df output '{df_output}': {e}")
+
+            except Exception as e:
+                logger.error(f"SSH operations failed: {e}")
+            finally:
+                if ssh:
+                    ssh.close()
+                    logger.debug(f"Closed SSH connection to {sensor_fqdn}")
+
+            # Now get subnet data
+            # Source subnets (command 4,10)
+            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 4,10"
+            logger.debug(f"Running command: {cmd}")
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                parts = result.stdout.strip().split(',')
+                logger.debug(f"Source subnet response: {parts}")
+                if len(parts) > 3:  # Has subnet data
+                    # Skip first 3 fields (4,count,0)
+                    for i in range(3, len(parts), 3):
+                        if i + 2 < len(parts):
+                            # Add /24 to subnet if not present
+                            subnet = parts[i] if parts[i].endswith('/24') else f"{parts[i]}/24"
+                            device_stats['subnet_data']['src_subnets'].append({
+                                'subnet': subnet,
+                                'count': int(parts[i+1]),
+                                'timestamp': int(parts[i+2])
+                            })
+                logger.debug(f"Parsed {len(device_stats['subnet_data']['src_subnets'])} source subnets")
+
+            # Destination subnets (command 5,10)
+            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 5,10"
+            logger.debug(f"Running command: {cmd}")
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+            if result.returncode == 0:
+                parts = result.stdout.strip().split(',')
+                logger.debug(f"Destination subnet response: {parts}")
+                if len(parts) > 3:  # Has subnet data
+                    # Skip first 3 fields (5,count,0)
+                    for i in range(3, len(parts), 3):
+                        if i + 2 < len(parts):
+                            # Add /24 to subnet if not present
+                            subnet = parts[i] if parts[i].endswith('/24') else f"{parts[i]}/24"
+                            device_stats['subnet_data']['dst_subnets'].append({
+                                'subnet': subnet,
+                                'count': int(parts[i+1]),
+                                'timestamp': int(parts[i+2])
+                            })
+                logger.debug(f"Parsed {len(device_stats['subnet_data']['dst_subnets'])} destination subnets")
+
+            return device_stats
+
+        except Exception as e:
+            logger.error(f"Error getting device stats: {e}")
+            logger.error(traceback.format_exc())
+            return self._create_offline_device_stats()
 
     def update_device_status(self, cur, sensor_name: str, device_name: str,
                            port: int, new_stats: Dict[str, Any],
@@ -504,58 +494,77 @@ class SensorMonitor:
         logger.debug(f"Checking status for sensor {sensor_fqdn}")
         try:
             # Try to ping the sensor first
-            result = subprocess.run(["ping", "-c", "1", "-W", "2", sensor_fqdn], capture_output=True, text=True)
+            result = subprocess.run(
+                ["ping", "-c", "1", "-W", "2", sensor_fqdn],
+                capture_output=True,
+                text=True
+            )
 
             if result.returncode != 0:
                 logger.debug(f"Ping failed for {sensor_fqdn}")
                 return 'Offline'
 
             # If ping succeeds, try SSH checks
-            ssh, connected = self.establish_ssh_connection(sensor_fqdn)
-            if not connected:
-                return 'Degraded'
-
+            ssh = None
             try:
-                # Combine agent.py check and disk space check into single command
-                cmd = "pgrep -f 'agent.py' >/dev/null && df -h /opt/pcapserver | tail -n1 | awk '{print $4,$5}'"
-                _, stdout, stderr = ssh.exec_command(cmd, timeout=5)
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-                # Check stderr first - if agent.py isn't running, command will fail
-                agent_error = stderr.read().decode().strip()
-                if agent_error:
-                    logger.debug(f"agent.py not running on {sensor_fqdn}")
-                    return 'Degraded'
+                # Try each SSH key until one works
+                connected = False
+                for pubkey in self.ssh_keys:
+                    try:
+                        logger.debug(f'SSH {sensor_fqdn} using pubkey: {pubkey}')
+                        ssh.connect(
+                            sensor_fqdn,
+                            username=self.config.get("SSH", "username", fallback="pcapuser"),
+                            key_filename=pubkey,
+                            timeout=self.config.getint("SSH", "timeout", fallback=10)
+                        )
+                        logger.info(f'SSH {sensor_fqdn} established with pubkey: {pubkey}')
+                        connected = True
+                        break
+                    except Exception as e:
+                        logger.debug(f'SSH {sensor_fqdn} failed with pubkey: {pubkey} - {str(e)}')
+                        continue
 
-                # If we get here, agent.py is running, check df output
-                df_output = stdout.read().decode().strip()
-                if not df_output:
-                    logger.debug(f"No disk space info from {sensor_fqdn}")
-                    return 'Degraded'
+                if not connected:
+                    return 'Offline'
 
-                try:
-                    avail, used_pct = df_output.split()
-                    used_pct = int(used_pct.rstrip('%'))
+                # Check if agent.py is running and get disk space in one command
+                cmd = "pgrep -f 'agent.py' >/dev/null && df -h /pcap | tail -n1 | awk '{print $4,$5}'"
+                _, stdout, _ = ssh.exec_command(cmd, timeout=5)
+                output = stdout.read().decode().strip()
 
-                    if used_pct >= 90:  # High disk usage
-                        logger.debug(f"High disk usage on {sensor_fqdn}: {used_pct}%")
+                if output:  # agent.py is running
+                    try:
+                        _, used_pct = output.split()
+                        used_pct = int(used_pct.rstrip('%'))
+
+                        if used_pct >= 90:  # High disk usage
+                            logger.debug(f"High disk usage on {sensor_fqdn}: {used_pct}%")
+                            return 'Degraded'
+
+                        return 'Busy'  # agent.py running means sensor is busy
+                    except (ValueError, IndexError) as e:
+                        logger.error(f"Error parsing disk space output '{output}': {e}")
                         return 'Degraded'
 
-                    return 'Online'
-                except (ValueError, IndexError) as e:
-                    logger.error(f"Error parsing disk space output '{df_output}': {e}")
-                    return 'Degraded'
+                return 'Online'  # agent.py not running, disk space ok
 
             except Exception as e:
                 logger.error(f"SSH connection failed for {sensor_fqdn}: {e}")
                 return 'Degraded'
             finally:
-                ssh.close()
+                if ssh:
+                    ssh.close()
+                    logger.debug(f"Closed SSH connection to {sensor_fqdn}")
 
         except Exception as e:
             logger.error(f"Error checking sensor status: {e}")
             return 'Offline'
 
-    def check_all_sensors_status(self):
+def check_all_sensors_status(self):
         """Check basic connectivity and status of all sensors"""
         logger.info("Starting sensor status check")
         conn = psycopg2.connect(**self.db_params)
@@ -670,13 +679,12 @@ class SensorMonitor:
             cur.close()
             conn.close()
 
-    def update_subnet_location_map(self, cur, location: str):
+def update_subnet_location_map(self, cur, location: str):
         """Update subnet_location_map based on loc_src and loc_dst tables for a location"""
         try:
-            # Convert location to uppercase
             location = location.strip().upper()
             logger.debug(f"Updating subnet_location_map for location {location}")
-            # Get the canonical location name from locations table
+
             cur.execute("""
                 SELECT site
                 FROM locations
@@ -686,9 +694,8 @@ class SensorMonitor:
             if not src_loc_result:
                 logger.error(f"Source location {location} not found in locations table")
                 return
-            src_location = src_loc_result[0]  # Use canonical name
+            src_location = src_loc_result[0]
 
-            # Get all other active locations, ensuring they exist in locations table
             cur.execute("""
                 SELECT DISTINCT l.site
                 FROM sensors s
@@ -698,14 +705,12 @@ class SensorMonitor:
             """, (location,))
             dst_locations = [row[0] for row in cur.fetchall()]
 
-            # Process each destination location separately using new optimized function
             current_time = int(time.time())
             for dst_location in dst_locations:
                 logger.debug(f"Processing mappings from {src_location} to {dst_location}")
                 cur.execute("SELECT update_subnet_mappings(%s, %s, %s)",
                           (src_location, dst_location, current_time))
 
-            # Refresh the network traffic summary view
             cur.execute("REFRESH MATERIALIZED VIEW network_traffic_summary")
 
         except Exception as e:
@@ -716,7 +721,6 @@ class SensorMonitor:
         """Update subnet information for a device"""
         logger.debug(f"Updating subnets for device {device_name} on sensor {sensor_name}")
         try:
-            # Get device's location and ensure it exists in locations table
             cur.execute("""
                 SELECT l.site
                 FROM sensors s
@@ -727,12 +731,11 @@ class SensorMonitor:
             if not result:
                 logger.error(f"Location not found for sensor {sensor_name}")
                 return
-            location = result[0]  # Use canonical name
+            location = result[0]
             logger.debug(f"Device location: {location}")
 
             current_time = int(time.time())
 
-            # Process source subnets
             if 'src_subnets' in subnet_data:
                 src_values = [(
                     subnet['subnet'],
@@ -760,7 +763,6 @@ class SensorMonitor:
                     summary.src_subnets += len(src_values)
                     summary.unique_subnets.update(v[0] for v in src_values)
 
-            # Process destination subnets
             if 'dst_subnets' in subnet_data:
                 dst_values = [(
                     subnet['subnet'],
@@ -788,7 +790,6 @@ class SensorMonitor:
                     summary.dst_subnets += len(dst_values)
                     summary.unique_subnets.update(v[0] for v in dst_values)
 
-            # Update subnet mappings using new function with canonical location name
             cur.execute("""
                 SELECT update_subnet_mappings(%s, %s, %s)
             """, (location, location, current_time))
@@ -801,22 +802,19 @@ class SensorMonitor:
             summary.add_error("subnet_update", str(e))
             raise
 
-    def run_maintenance_tasks(self):
+def run_maintenance_tasks(self):
         """Run periodic maintenance tasks"""
         logger.info("Starting maintenance tasks")
         conn = psycopg2.connect(**self.db_params)
         try:
             cur = conn.cursor()
 
-            # Manage partitions
             logger.debug("Managing time-based partitions")
             manage_time_partitions(cur, self.config.getint('DB', 'retention_hours', fallback=24))
 
-            # Clean up old data (uses internal 24-hour cutoff)
             logger.debug("Cleaning up old subnet mappings")
             cur.execute("SELECT cleanup_old_subnet_mappings()")
 
-            # Refresh materialized view
             logger.debug("Refreshing network traffic summary")
             cur.execute("SELECT refresh_network_traffic_summary()")
 
@@ -829,7 +827,6 @@ class SensorMonitor:
 
     def update_sensor_info(self, cur, sensor_name: str, sensor_fqdn: str, summary: ProcessingSummary):
         """Update information for a single sensor and its devices"""
-        # Get sensor's devices
         cur.execute("""
             SELECT name, port, device_type
             FROM devices
@@ -838,16 +835,13 @@ class SensorMonitor:
         devices = cur.fetchall()
         logger.debug(f"Found {len(devices)} devices for sensor {sensor_name}")
 
-        # Update each device
         for device_name, port, device_type in devices:
             try:
                 logger.debug(f"Updating device {device_name} on sensor {sensor_name}")
                 stats = self.get_device_stats(sensor_fqdn, port)
 
-                # Track device stats for summary
                 summary.add_device_stats(device_name, stats)
 
-                # Update device info
                 cur.execute("""
                     UPDATE devices
                     SET status = %s,
@@ -867,26 +861,26 @@ class SensorMonitor:
                         stats_date = %s,
                         fqdn = %s
                     WHERE sensor = %s AND name = %s
-                """,
-                (stats['status'],
-                 stats['runtime'],
-                 stats['workers'],
-                 stats['src_subnets'],
-                 stats['dst_subnets'],
-                 stats['uniq_subnets'],
-                 stats['avg_idle_time'],
-                 stats['avg_work_time'],
-                 stats['overflows'],
-                 stats['size'],
-                 stats['version'],
-                 stats['output_path'],
-                 stats['proc'],
-                 stats['stats_date'],
-                 sensor_fqdn,
-                 sensor_name,
-                 device_name))
+                """, (
+                    stats['status'],
+                    stats['runtime'],
+                    stats['workers'],
+                    stats['src_subnets'],
+                    stats['dst_subnets'],
+                    stats['uniq_subnets'],
+                    stats['avg_idle_time'],
+                    stats['avg_work_time'],
+                    stats['overflows'],
+                    stats['size'],
+                    stats['version'],
+                    stats['output_path'],
+                    stats['proc'],
+                    stats['stats_date'],
+                    sensor_fqdn,
+                    sensor_name,
+                    device_name
+                ))
 
-                # Update sensor info with data from first device
                 if device_name == devices[0][0]:
                     cur.execute("""
                         UPDATE sensors
@@ -896,14 +890,14 @@ class SensorMonitor:
                             totalspace = %s,
                             usedspace = %s
                         WHERE name = %s
-                    """,
-                    (stats['version'],
-                     stats.get('pcap_avail', 0),  # Default to 0 if not present
-                     stats.get('totalspace', '0'),  # Default to '0' if not present
-                     stats.get('usedspace', '0'),  # Default to '0' if not present
-                     sensor_name))
+                    """, (
+                        stats['version'],
+                        stats.get('pcap_avail', 0),
+                        stats.get('totalspace', '0'),
+                        stats.get('usedspace', '0'),
+                        sensor_name
+                    ))
 
-                # Update subnet information
                 if 'subnet_data' in stats:
                     logger.debug(f"Processing subnet data for device {device_name}")
                     self.update_device_subnets(cur, stats['subnet_data'], sensor_name, device_name, summary)
@@ -919,7 +913,6 @@ class SensorMonitor:
                 logger.error(f"Error updating device {device_name}: {e}")
                 summary.add_error("device_update", str(e))
 
-        # Invalidate caches after successful update
         logger.debug("Invalidating caches")
         invalidate_caches()
 
