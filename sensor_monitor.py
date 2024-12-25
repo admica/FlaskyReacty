@@ -173,7 +173,11 @@ class SensorMonitor:
         self.status_check_interval = self.config.getint('MONITOR', 'status_check_interval', fallback=60)
         self.info_update_interval = self.config.getint('MONITOR', 'info_update_interval', fallback=300)
         self.pcap_ctrl = self.config.get('SENSOR', 'pcapCtrl', fallback='/opt/pcapserver/bin/pcapCtrl')
+        # Get subnet limits from config, 0 means no limit
+        self.src_subnet_limit = self.config.getint('SENSOR', 'src_subnet_limit', fallback=0)
+        self.dst_subnet_limit = self.config.getint('SENSOR', 'dst_subnet_limit', fallback=0)
         logger.debug(f"Monitor intervals: status={self.status_check_interval}s, info={self.info_update_interval}s")
+        logger.debug(f"Subnet limits: src={self.src_subnet_limit}, dst={self.dst_subnet_limit}")
 
         # Initialize SSH keys list
         self.ssh_keys = []
@@ -396,7 +400,8 @@ class SensorMonitor:
 
             # Now get subnet data
             # Source subnets (command 4,10)
-            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 4,10"
+            src_limit_param = f",{self.src_subnet_limit}" if self.src_subnet_limit > 0 else ",0"
+            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 4{src_limit_param}"
             logger.debug(f"Running command: {cmd}")
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
@@ -417,7 +422,8 @@ class SensorMonitor:
                 logger.debug(f"Parsed {len(device_stats['subnet_data']['src_subnets'])} source subnets")
 
             # Destination subnets (command 5,10)
-            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 5,10"
+            dst_limit_param = f",{self.dst_subnet_limit}" if self.dst_subnet_limit > 0 else ",0"
+            cmd = f"{self.pcap_ctrl} -h {sensor_fqdn} -p {port} -c 5{dst_limit_param}"
             logger.debug(f"Running command: {cmd}")
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
