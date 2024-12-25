@@ -27,7 +27,7 @@ def main():
 
     # Print EXACTLY the format that sensor_monitor.py expects
     logger.debug("Outputting PCAP minutes in expected format")
-    print(f"AGENT_MINUTES_OF_PCAP_AVAILABLE {pcap_minutes}\n")
+    sys.stderr.write(f"AGENT_MINUTES_OF_PCAP_AVAILABLE {pcap_minutes}\n\n")
 
     logger.debug("Agent execution completed successfully")
     # Exit with success
