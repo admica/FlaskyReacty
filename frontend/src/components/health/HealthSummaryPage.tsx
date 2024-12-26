@@ -8,19 +8,13 @@ export function HealthSummaryPage() {
   const [summaries, setSummaries] = useState<HealthSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [startTime, setStartTime] = useState<Date | null>(null);
-  const [endTime, setEndTime] = useState<Date | null>(null);
-  const [refreshInterval, setRefreshInterval] = useState<string>('30');
+  const [refreshInterval, setRefreshInterval] = useState<string>('60');
   const [refreshProgress, setRefreshProgress] = useState(100);
 
   const fetchSummaries = async () => {
     try {
       setLoading(true);
-      const params: { start_time?: string; end_time?: string } = {};
-      if (startTime) params.start_time = startTime.toISOString();
-      if (endTime) params.end_time = endTime.toISOString();
-      
-      const response = await apiService.getHealthSummary(params);
+      const response = await apiService.getHealthSummary({});
       setSummaries(response.summaries || []);
       setError(null);
     } catch (err: any) {
@@ -34,7 +28,7 @@ export function HealthSummaryPage() {
   // Initial fetch
   useEffect(() => {
     fetchSummaries();
-  }, [startTime, endTime]);
+  }, []);
 
   // Auto-refresh setup
   useEffect(() => {
@@ -148,48 +142,27 @@ export function HealthSummaryPage() {
       <Stack spacing="md">
         <Group position="apart">
           <Title order={2}>Sensor Health Summary</Title>
-          <Group>
-            <DateTimePicker
-              label="Start Time"
-              placeholder="Select start time"
-              value={startTime}
-              onChange={setStartTime}
-              clearable
-            />
-            <DateTimePicker
-              label="End Time"
-              placeholder="Select end time"
-              value={endTime}
-              onChange={setEndTime}
-              clearable
-            />
+          <Group align="flex-end" spacing="md">
             <Select
               label="Auto-refresh"
               value={refreshInterval}
-              onChange={val => setRefreshInterval(val || '30')}
+              onChange={val => setRefreshInterval(val || '60')}
               data={[
-                { value: '0', label: 'Disabled' },
                 { value: '30', label: '30 seconds' },
                 { value: '60', label: '1 minute' },
                 { value: '300', label: '5 minutes' }
               ]}
             />
-            {refreshInterval !== '0' && (
+            <Box pt={25}>
               <RingProgress
                 size={40}
                 thickness={4}
                 roundCaps
                 sections={[{ value: refreshProgress, color: 'blue' }]}
               />
-            )}
+            </Box>
           </Group>
         </Group>
-
-        {timeRange && (
-          <Text size="sm" color="dimmed">
-            Showing data from {timeRange.start.toLocaleString()} to {timeRange.end.toLocaleString()}
-          </Text>
-        )}
 
         <Grid>
           {/* Sensors Status */}
