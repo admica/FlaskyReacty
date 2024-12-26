@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, Title, Text, Badge, Group, Stack, Card, Loader, Select, RingProgress, Tooltip, Paper, Grid, Table } from '@mantine/core';
+import { Box, Title, Text, Badge, Group, Stack, Card, Loader, Select, RingProgress, Tooltip, Paper, Grid, Table, Progress } from '@mantine/core';
 import { DateTimePicker } from '@mantine/dates';
 import apiService from '../../services/api';
 import type { HealthSummary } from '../../services/api';
@@ -197,27 +197,36 @@ export function HealthSummaryPage() {
             <Card withBorder>
               <Stack>
                 <Title order={3}>Sensors Status</Title>
-                <Group position="center">
+                <Group position="apart" align="flex-start">
+                  <Stack spacing="xs">
+                    <Group spacing="xs" noWrap>
+                      <Text size="sm" w={70}>Online</Text>
+                      <Badge size="lg" color="green">{aggregatedData.sensors.online}</Badge>
+                    </Group>
+                    <Group spacing="xs" noWrap>
+                      <Text size="sm" w={70}>Offline</Text>
+                      <Badge size="lg" color="red">{aggregatedData.sensors.offline}</Badge>
+                    </Group>
+                    <Group spacing="xs" noWrap>
+                      <Text size="sm" w={70}>Degraded</Text>
+                      <Badge size="lg" color="yellow">{aggregatedData.sensors.degraded}</Badge>
+                    </Group>
+                  </Stack>
                   <RingProgress
-                    size={200}
-                    thickness={20}
+                    size={120}
+                    thickness={12}
                     label={
-                      <Text size="xl" align="center">
+                      <Text size="xs" align="center">
                         {aggregatedData.sensors.total}
-                        <Text size="sm" color="dimmed">Total</Text>
+                        <Text size="xs" color="dimmed">Total</Text>
                       </Text>
                     }
                     sections={[
                       { value: (aggregatedData.sensors.online / aggregatedData.sensors.total) * 100, color: 'green', tooltip: `Online: ${aggregatedData.sensors.online}` },
                       { value: (aggregatedData.sensors.offline / aggregatedData.sensors.total) * 100, color: 'red', tooltip: `Offline: ${aggregatedData.sensors.offline}` },
-                      { value: (aggregatedData.sensors.degraded / aggregatedData.sensors.total) * 100, color: 'yellow', tooltip: `Degraded: ${aggregatedData.sensors.degraded}` },
+                      { value: (aggregatedData.sensors.degraded / aggregatedData.sensors.total) * 100, color: 'yellow', tooltip: `Degraded: ${aggregatedData.sensors.degraded}` }
                     ]}
                   />
-                </Group>
-                <Group position="center" spacing="xs">
-                  <Badge color="green">Online: {aggregatedData.sensors.online}</Badge>
-                  <Badge color="red">Offline: {aggregatedData.sensors.offline}</Badge>
-                  <Badge color="yellow">Degraded: {aggregatedData.sensors.degraded}</Badge>
                 </Group>
               </Stack>
             </Card>
@@ -228,27 +237,36 @@ export function HealthSummaryPage() {
             <Card withBorder>
               <Stack>
                 <Title order={3}>Devices Status</Title>
-                <Group position="center">
+                <Group position="apart" align="flex-start">
+                  <Stack spacing="xs">
+                    <Group spacing="xs" noWrap>
+                      <Text size="sm" w={70}>Online</Text>
+                      <Badge size="lg" color="green">{aggregatedData.devices.online}</Badge>
+                    </Group>
+                    <Group spacing="xs" noWrap>
+                      <Text size="sm" w={70}>Offline</Text>
+                      <Badge size="lg" color="red">{aggregatedData.devices.offline}</Badge>
+                    </Group>
+                    <Group spacing="xs" noWrap>
+                      <Text size="sm" w={70}>Degraded</Text>
+                      <Badge size="lg" color="yellow">{aggregatedData.devices.degraded}</Badge>
+                    </Group>
+                  </Stack>
                   <RingProgress
-                    size={200}
-                    thickness={20}
+                    size={120}
+                    thickness={12}
                     label={
-                      <Text size="xl" align="center">
+                      <Text size="xs" align="center">
                         {aggregatedData.devices.total}
-                        <Text size="sm" color="dimmed">Total</Text>
+                        <Text size="xs" color="dimmed">Total</Text>
                       </Text>
                     }
                     sections={[
                       { value: (aggregatedData.devices.online / aggregatedData.devices.total) * 100, color: 'green', tooltip: `Online: ${aggregatedData.devices.online}` },
                       { value: (aggregatedData.devices.offline / aggregatedData.devices.total) * 100, color: 'red', tooltip: `Offline: ${aggregatedData.devices.offline}` },
-                      { value: (aggregatedData.devices.degraded / aggregatedData.devices.total) * 100, color: 'yellow', tooltip: `Degraded: ${aggregatedData.devices.degraded}` },
+                      { value: (aggregatedData.devices.degraded / aggregatedData.devices.total) * 100, color: 'yellow', tooltip: `Degraded: ${aggregatedData.devices.degraded}` }
                     ]}
                   />
-                </Group>
-                <Group position="center" spacing="xs">
-                  <Badge color="green">Online: {aggregatedData.devices.online}</Badge>
-                  <Badge color="red">Offline: {aggregatedData.devices.offline}</Badge>
-                  <Badge color="yellow">Degraded: {aggregatedData.devices.degraded}</Badge>
                 </Group>
               </Stack>
             </Card>
@@ -295,7 +313,7 @@ export function HealthSummaryPage() {
               <Stack>
                 <Title order={3}>System Health Trends</Title>
                 <Grid>
-                  <Grid.Col span={4}>
+                  <Grid.Col span={6}>
                     <Stack align="center">
                       <Title order={4}>Network Activity</Title>
                       <Group spacing="xl">
@@ -310,7 +328,7 @@ export function HealthSummaryPage() {
                       </Group>
                     </Stack>
                   </Grid.Col>
-                  <Grid.Col span={4}>
+                  <Grid.Col span={6}>
                     <Stack align="center">
                       <Title order={4}>Storage Health</Title>
                       <Group spacing="xl">
@@ -323,21 +341,6 @@ export function HealthSummaryPage() {
                           <Text size="xl" color={aggregatedData.metrics.avg_disk_usage_pct > 80 ? 'red' : aggregatedData.metrics.avg_disk_usage_pct > 60 ? 'yellow' : 'green'}>
                             {Math.round(aggregatedData.metrics.avg_disk_usage_pct)}%
                           </Text>
-                        </Stack>
-                      </Group>
-                    </Stack>
-                  </Grid.Col>
-                  <Grid.Col span={4}>
-                    <Stack align="center">
-                      <Title order={4}>System Resources</Title>
-                      <Group spacing="xl">
-                        <Stack align="center">
-                          <Text size="sm" color="dimmed">Peak Memory</Text>
-                          <Text size="xl">{Math.round(aggregatedData.performance.peak_memory_mb)} MB</Text>
-                        </Stack>
-                        <Stack align="center">
-                          <Text size="sm" color="dimmed">Active Jobs</Text>
-                          <Text size="xl">{summaries[0]?.performance_metrics?.active_jobs || 0}</Text>
                         </Stack>
                       </Group>
                     </Stack>
@@ -390,49 +393,6 @@ export function HealthSummaryPage() {
                             color={stats.health_score > 80 ? 'green' : stats.health_score > 60 ? 'yellow' : 'red'}
                           >
                             {stats.health_score || 0}%
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
-          {/* Recent Events */}
-          <Grid.Col span={12}>
-            <Card withBorder>
-              <Stack>
-                <Title order={3}>System Events</Title>
-                <Table>
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Type</th>
-                      <th>Location</th>
-                      <th>Description</th>
-                      <th>Impact</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summaries[0]?.performance_metrics?.recent_events?.slice(0, 5).map((event: any, index: number) => (
-                      <tr key={index}>
-                        <td>{new Date(event.timestamp).toLocaleTimeString()}</td>
-                        <td>
-                          <Badge 
-                            color={event.type === 'error' ? 'red' : event.type === 'warning' ? 'yellow' : 'blue'}
-                          >
-                            {event.type}
-                          </Badge>
-                        </td>
-                        <td>{event.location}</td>
-                        <td>{event.description}</td>
-                        <td>
-                          <Badge 
-                            color={event.impact === 'high' ? 'red' : event.impact === 'medium' ? 'yellow' : 'green'}
-                          >
-                            {event.impact}
                           </Badge>
                         </td>
                       </tr>
