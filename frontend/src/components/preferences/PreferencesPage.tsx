@@ -9,13 +9,13 @@ import {
   Divider,
   Avatar,
   Box,
-  ActionIcon,
   ScrollArea,
   Title,
   useMantineColorScheme,
 } from '@mantine/core';
 import { IconMoonStars, IconSun, IconRefresh } from '@tabler/icons-react';
 import apiService from '../../services/api';
+import type { UserPreferences } from '../../services/api';
 
 interface DebugMessage {
   id: number;
@@ -24,7 +24,7 @@ interface DebugMessage {
 }
 
 export function PreferencesPage() {
-  const [theme, setTheme] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [avatarSeed, setAvatarSeed] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -44,7 +44,6 @@ export function PreferencesPage() {
         timestamp: new Date().toLocaleTimeString(),
         message
       }];
-      // Auto-scroll to bottom
       setTimeout(() => {
         if (scrollRef.current) {
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -68,28 +67,29 @@ export function PreferencesPage() {
   const loadUserPreferences = async () => {
     try {
       addDebugMessage('Loading user preferences...');
-      const response = await apiService.getPreferences();
-      addDebugMessage('Loaded preferences from backend: ' + JSON.stringify(response));
+      const preferences = await apiService.getPreferences();
+      addDebugMessage('Loaded preferences from backend: ' + JSON.stringify(preferences));
       
-      if (response) {
-        const backendTheme = response.theme || 'dark';
+      if (preferences) {
+        const backendTheme = preferences.theme || 'dark';
         setTheme(backendTheme);
         localStorage.setItem('theme', backendTheme);
-        setAvatarSeed(response.avatar_seed || Math.floor(Math.random() * 1000000));
-        addDebugMessage('Applied preferences: theme=' + backendTheme + ', avatar_seed=' + response.avatar_seed);
+        setAvatarSeed(preferences.avatar_seed);
+        setColorScheme(backendTheme);
+        addDebugMessage('Applied preferences: theme=' + backendTheme + ', avatar_seed=' + preferences.avatar_seed);
       } else {
-        // Only use localStorage if backend has no data
-        const localTheme = localStorage.getItem('theme') || 'dark';
+        const localTheme = (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
         setTheme(localTheme);
+        setColorScheme(localTheme);
         addDebugMessage('Using local theme preference: ' + localTheme);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       addDebugMessage('Failed to load preferences: ' + errorMessage);
       console.error('Failed to load preferences:', error);
-      // On error, fall back to localStorage
-      const localTheme = localStorage.getItem('theme') || 'dark';
+      const localTheme = (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
       setTheme(localTheme);
+      setColorScheme(localTheme);
       addDebugMessage('Using local theme preference after error: ' + localTheme);
     } finally {
       setPreferencesLoaded(true);
@@ -97,21 +97,22 @@ export function PreferencesPage() {
   };
 
   const savePreferences = async () => {
-    const theme = localStorage.getItem('theme');
-    const validTheme = theme === 'light' || theme === 'dark' ? theme : 'light';
-    localStorage.setItem('theme', validTheme);
+    setLoading(true);
+    setSaveStatus('idle');
+
+    const preferences: UserPreferences = {
+      theme,
+      avatar_seed: avatarSeed,
+      settings: {}
+    };
 
     try {
-      await apiService.savePreferences({
-        theme: validTheme,
-        avatar_seed: avatarSeed,
-        settings: {}
-      });
+      addDebugMessage('Saving preferences: ' + JSON.stringify(preferences));
+      await apiService.savePreferences(preferences);
       addDebugMessage('Preferences saved successfully');
-      localStorage.setItem('theme', validTheme);
-      setColorScheme(validTheme as 'light' | 'dark');
+      localStorage.setItem('theme', theme);
+      setColorScheme(theme);
       setSaveStatus('success');
-      await loadUserPreferences();
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message;
       addDebugMessage('Failed to save preferences: ' + errorMessage);
@@ -123,18 +124,20 @@ export function PreferencesPage() {
     }
   };
 
-  const handleThemeChange = async (newTheme: string) => {
+  const handleThemeChange = async (newTheme: 'light' | 'dark') => {
     addDebugMessage('Changing theme to: ' + newTheme);
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
-    setColorScheme(newTheme as 'light' | 'dark');
+    setColorScheme(newTheme);
+    
+    const preferences: UserPreferences = {
+      theme: newTheme,
+      avatar_seed: avatarSeed,
+      settings: {}
+    };
     
     try {
-      await apiService.savePreferences({
-        theme: newTheme,
-        avatar_seed: avatarSeed,
-        settings: {}
-      });
+      await apiService.savePreferences(preferences);
       addDebugMessage('Theme preference saved to backend');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { createAxiosInstance } from '../lib/axios';
 
 // Debug logging function
 const debug = (message: string, data?: any) => {
@@ -128,13 +128,14 @@ export interface HealthSummary {
   performance_metrics: Record<string, any>;
 }
 
-// Create axios instance
-export const api = axios.create({
-  baseURL: (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+export interface UserPreferences {
+  theme: 'light' | 'dark';
+  avatar_seed: number | null;
+  settings: Record<string, any>;
+}
+
+// Create main API instance
+export const api = createAxiosInstance();
 
 // Token refresh state
 let isRefreshing = false;
@@ -157,28 +158,10 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Create a separate axios instance for refresh requests to avoid interceptor loops
-const refreshApi = axios.create({
-  baseURL: (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// Create a separate instance for refresh requests to avoid interceptor loops
+export const refreshApi = createAxiosInstance();
 
-// Add request interceptor
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`;
-    debug('Adding auth token to request', { url: config.url });
-  }
-  return config;
-}, (error) => {
-  debug('Request interceptor error', { error: error.message });
-  return Promise.reject(error);
-});
-
-// Add response interceptor
+// Add response interceptor for token refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -250,7 +233,7 @@ api.interceptors.response.use(
         debug('Token refresh failed', { 
           error: refreshError.message,
           status: refreshError.response?.status,
-          data: refreshError.response?.data 
+          data: refreshError.response?.data
         });
         processQueue(refreshError);
         clearAuthData();
@@ -464,13 +447,13 @@ const apiService = {
   // Preferences
   async getPreferences() {
     debug('Fetching user preferences');
-    const response = await api.get('/preferences');
+    const response = await api.get<UserPreferences>('/preferences');
     return response.data;
   },
 
-  async savePreferences(data: any) {
-    debug('Saving user preferences', data);
-    const response = await api.post('/preferences', data);
+  async savePreferences(preferences: UserPreferences) {
+    debug('Saving user preferences', preferences);
+    const response = await api.post<UserPreferences>('/preferences', preferences);
     return response.data;
   },
 
