@@ -28,7 +28,7 @@ console = Console()
 class TestRunner:
     """Main test runner that discovers and executes test suites"""
 
-    def __init__(self, base_url: str = "https://localhost:3000", max_output_length: int = 150):
+    def __init__(self, base_url: str = "https://localhost:3000", max_output_length: int = 120):
         self.base_url = base_url
         self.max_output_length = max_output_length
         self.results = []
@@ -184,7 +184,7 @@ def main():
     args = sys.argv[1:]
     base_url = "https://localhost:3000"
     test_files = []
-    max_output_length = 150 # Default number of lines
+    max_output_length = 120 # Default number of lines
 
     # Parse arguments
     i = 0

@@ -127,7 +127,8 @@ def create_user_session(username):
     """Create a new user session and return the session token"""
     try:
         session_token = str(uuid4())
-        expires_at = datetime.now(timezone.utc) + timedelta(days=30)  # 30 day expiry
+        retention_days = config.getint('SERVER', 'user_sessions_keep_days', fallback=30)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
 
         # Insert new session record
         result = db("""
@@ -137,7 +138,7 @@ def create_user_session(username):
         """, (username, session_token, expires_at))
 
         if result and result[0]:
-            logger.info(f"Created new session for user: {username}")
+            logger.info(f"Created new session for user: {username} (expires in {retention_days} days)")
             return result[0][0]
 
         logger.error(f"Failed to create session for user: {username}")
@@ -148,17 +149,20 @@ def create_user_session(username):
         return None
 
 def cleanup_old_sessions():
-    """Clean up expired sessions and sessions older than 30 days"""
+    """Clean up expired sessions and sessions older than configured retention period"""
     try:
+        # Get retention period from config
+        retention_days = config.getint('SERVER', 'user_sessions_keep_days', fallback=30)
+        
         result = db("""
             WITH deleted_sessions AS (
                 DELETE FROM user_sessions
                 WHERE expires_at < NOW() 
-                   OR created_at < NOW() - INTERVAL '30 days'
+                   OR created_at < NOW() - INTERVAL '%s days'
                 RETURNING id
             )
             SELECT COUNT(*) FROM deleted_sessions
-        """)
+        """, [retention_days])
         
         deleted_count = result[0][0] if result and result[0] else 0
         
@@ -174,14 +178,14 @@ def cleanup_old_sessions():
                     %s,
                     jsonb_build_object(
                         'reason', 'Automated cleanup of expired and old sessions',
-                        'retention_days', 30
+                        'retention_days', %s
                     )
                 )
-            """, [deleted_count, deleted_count])
+            """, [deleted_count, deleted_count, retention_days])
             
-            logger.info(f"Cleaned up {deleted_count} expired or old user sessions")
+            logger.info(f"Cleaned up {deleted_count} expired or old user sessions (retention: {retention_days} days)")
         else:
-            logger.debug("No sessions needed cleanup")
+            logger.debug(f"No sessions needed cleanup (retention: {retention_days} days)")
             
     except Exception as e:
         logger.error(f"Error cleaning up sessions: {e}")
@@ -190,8 +194,11 @@ def cleanup_old_sessions():
 def update_user_activity(username):
     """Update user's session expiry"""
     try:
+        # Get retention period from config
+        retention_days = config.getint('SERVER', 'user_sessions_keep_days', fallback=30)
+        new_expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
+        
         # First try to update existing session
-        new_expires_at = datetime.now(timezone.utc) + timedelta(days=30)
         result = db("""
             UPDATE user_sessions
             SET expires_at = %s
@@ -207,7 +214,7 @@ def update_user_activity(username):
                 VALUES (%s, %s, %s)
             """, (username, session_token, new_expires_at))
 
-        logger.debug(f"Updated session expiry for user: {username}")
+        logger.debug(f"Updated session expiry for user: {username} (expires in {retention_days} days)")
     except Exception as e:
         logger.error(f"Error updating user session: {e}")
 
