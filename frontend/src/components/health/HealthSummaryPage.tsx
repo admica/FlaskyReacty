@@ -296,15 +296,39 @@ export function HealthSummaryPage() {
                           <td>{location}</td>
                           <td>
                             <Group spacing={4}>
-                              <Badge color="green" size="sm">{stats.sensors_online || 0} online</Badge>
-                              <Badge color="red" size="sm">{stats.sensors_offline || 0} offline</Badge>
+                              <Badge 
+                                color={stats.sensors_online > 0 ? 'green' : 'gray.7'} 
+                                size="sm"
+                                variant={stats.sensors_online > 0 ? 'filled' : 'light'}
+                              >
+                                {stats.sensors_online || 0} online
+                              </Badge>
+                              <Badge 
+                                color={stats.sensors_offline > 0 ? 'red' : 'gray.7'} 
+                                size="sm"
+                                variant={stats.sensors_offline > 0 ? 'filled' : 'light'}
+                              >
+                                {stats.sensors_offline || 0} offline
+                              </Badge>
                               <Text size="xs" c="dimmed">Total: {stats.sensors_online + stats.sensors_offline}</Text>
                             </Group>
                           </td>
                           <td>
                             <Group spacing={4}>
-                              <Badge color="green" size="sm">{stats.devices_online || 0} online</Badge>
-                              <Badge color="red" size="sm">{stats.devices_offline || 0} offline</Badge>
+                              <Badge 
+                                color={stats.devices_online > 0 ? 'green' : 'gray.7'} 
+                                size="sm"
+                                variant={stats.devices_online > 0 ? 'filled' : 'light'}
+                              >
+                                {stats.devices_online || 0} online
+                              </Badge>
+                              <Badge 
+                                color={stats.devices_offline > 0 ? 'red' : 'gray.7'} 
+                                size="sm"
+                                variant={stats.devices_offline > 0 ? 'filled' : 'light'}
+                              >
+                                {stats.devices_offline || 0} offline
+                              </Badge>
                               <Text size="xs" c="dimmed">Total: {stats.devices_online + stats.devices_offline}</Text>
                             </Group>
                           </td>
