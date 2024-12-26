@@ -572,3 +572,94 @@ def get_active_users():
     except Exception as e:
         logger.error(f"Error getting active users: {e}")
         return jsonify({"error": "Failed to get active users"}), 500
+
+@admin_bp.route('/api/v1/admin/user-sessions', methods=['GET'])
+@admin_required()
+@rate_limit()
+def get_user_sessions_summary():
+    """Get list of active and recently active users with their latest session information"""
+    try:
+        # Get local and LDAP admin users
+        local_admins = set()
+        local_users = config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('role') == 'admin':
+                    local_admins.add(user_data.get('username'))
+            except json.JSONDecodeError:
+                continue
+
+        db_admins = set()
+        admin_rows = db("SELECT username FROM admin_users")
+        if admin_rows:
+            db_admins = {row[0] for row in admin_rows}
+
+        # Get active sessions (not expired)
+        active_rows = db("""
+            WITH latest_sessions AS (
+                SELECT DISTINCT ON (username)
+                    username,
+                    created_at as session_start,
+                    expires_at,
+                    session_token
+                FROM user_sessions
+                WHERE expires_at > NOW()
+                ORDER BY username, created_at DESC
+            )
+            SELECT * FROM latest_sessions
+            ORDER BY session_start DESC
+        """)
+
+        # Get recently active sessions (expired in the last 7 days)
+        recent_rows = db("""
+            WITH latest_sessions AS (
+                SELECT DISTINCT ON (username)
+                    username,
+                    created_at as session_start,
+                    expires_at,
+                    session_token
+                FROM user_sessions
+                WHERE expires_at <= NOW()
+                  AND expires_at > NOW() - INTERVAL '7 days'
+                ORDER BY username, created_at DESC
+            )
+            SELECT * FROM latest_sessions
+            ORDER BY session_start DESC
+        """)
+
+        # Process active users
+        active_users = []
+        active_usernames = set()  # Track active users to exclude from recently active
+        if active_rows:
+            for row in active_rows:
+                username = row[0]
+                active_usernames.add(username)
+                active_users.append({
+                    'username': username,
+                    'session_start': row[1].isoformat() if row[1] else None,
+                    'session_expires': row[2].isoformat() if row[2] else None,
+                    'role': 'admin' if username in local_admins or username in db_admins else 'user'
+                })
+
+        # Process recently active users (excluding those who are currently active)
+        recent_users = []
+        if recent_rows:
+            for row in recent_rows:
+                username = row[0]
+                if username not in active_usernames:  # Only include if not active
+                    recent_users.append({
+                        'username': username,
+                        'session_start': row[1].isoformat() if row[1] else None,
+                        'session_expires': row[2].isoformat() if row[2] else None,
+                        'role': 'admin' if username in local_admins or username in db_admins else 'user'
+                    })
+
+        return jsonify({
+            'active_users': active_users,
+            'recent_users': recent_users
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting user sessions summary: {e}")
+        return jsonify({"error": "Failed to get user sessions summary"}), 500

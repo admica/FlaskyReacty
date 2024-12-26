@@ -496,6 +496,33 @@ const apiService = {
     debug(`Fetched ${response.data.active_users.length} active users`);
     return response.data;
   },
+
+  async getUserSessions() {
+    debug('Fetching user sessions');
+    const response = await api.get('/users/sessions');
+    debug(`Fetched ${response.data.sessions?.length || 0} sessions`);
+
+    // Group sessions by username and get the latest session for each user
+    const userSessions = response.data.sessions?.reduce((acc: any, session: any) => {
+      if (!acc[session.username] || new Date(session.created_at) > new Date(acc[session.username].created_at)) {
+        acc[session.username] = {
+          username: session.username,
+          session_start: session.created_at,
+          session_expires: session.expires_at,
+          role: session.role
+        };
+      }
+      return acc;
+    }, {}) || {};
+
+    const sessions = Object.values(userSessions);
+    const now = new Date();
+
+    return {
+      active_users: sessions.filter((s: any) => new Date(s.session_expires) > now),
+      recent_users: sessions.filter((s: any) => new Date(s.session_expires) <= now)
+    };
+  }
 };
 
 export default apiService; 
