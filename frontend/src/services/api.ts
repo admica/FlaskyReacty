@@ -1,3 +1,4 @@
+import { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { createAxiosInstance } from '../lib/axios';
 
 // Debug logging function
@@ -7,12 +8,27 @@ const debug = (message: string, data?: any) => {
     ? `[API] ${message} | ${JSON.stringify(data)}`
     : `[API] ${message}`;
   console.debug(`${timestamp} ${logMessage}`);
-  // If we have a debug message handler from the app, use it
-  const debugHandler = (window as any).addDebugMessage;
+  const debugHandler = window.addDebugMessage;
   if (typeof debugHandler === 'function') {
     debugHandler(logMessage);
   }
 };
+
+// Queue management types
+interface QueueItem {
+  resolve: (value?: unknown) => void;
+  reject: (reason?: unknown) => void;
+}
+
+// Error types
+interface ApiError extends Error {
+  response?: {
+    data?: {
+      error?: string;
+    };
+    status?: number;
+  };
+}
 
 // Interfaces
 export interface Sensor {
@@ -139,14 +155,14 @@ export const api = createAxiosInstance();
 
 // Token refresh state
 let isRefreshing = false;
-let failedQueue: any[] = [];
+let failedQueue: QueueItem[] = [];
 let disableAutoRefresh = false;  // Flag to control auto-refresh
 
 export const setDisableAutoRefresh = (disable: boolean) => {
     disableAutoRefresh = disable;
 };
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: Error | null, token: string | null = null) => {
   debug(`Processing queued requests (${failedQueue.length} requests)${error ? ' with error' : ''}`);
   failedQueue.forEach(prom => {
     if (error) {
@@ -164,8 +180,8 @@ export const refreshApi = createAxiosInstance();
 // Add response interceptor for token refresh
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       debug('Received 401 error, checking if auto-refresh is enabled', {
@@ -182,12 +198,14 @@ api.interceptors.response.use(
 
       if (isRefreshing) {
         debug('Token refresh already in progress, queueing request');
-        return new Promise((resolve, reject) => {
+        return new Promise<unknown>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
           .then(token => {
             debug('Retrying queued request with new token', { url: originalRequest.url });
-            originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            if (typeof token === 'string') {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
             return api(originalRequest);
           })
           .catch(err => Promise.reject(err));
@@ -207,7 +225,11 @@ api.interceptors.response.use(
 
       try {
         debug('Sending refresh token request');
-        const response = await refreshApi.post('/refresh', {}, {
+        const response = await refreshApi.post<{
+          access_token: string;
+          refresh_token: string;
+          role: string;
+        }>('/refresh', {}, {
           headers: {
             'Authorization': `Bearer ${refreshToken}`
           }
@@ -222,23 +244,24 @@ api.interceptors.response.use(
         localStorage.setItem('isAdmin', role === 'admin' ? 'true' : 'false');
 
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-        originalRequest.headers['Authorization'] = `Bearer ${access_token}`;
+        originalRequest.headers.Authorization = `Bearer ${access_token}`;
 
         processQueue(null, access_token);
         isRefreshing = false;
         debug('Token refresh complete, retrying original request');
 
         return api(originalRequest);
-      } catch (refreshError: any) {
+      } catch (refreshError) {
+        const apiError = refreshError as ApiError;
         debug('Token refresh failed', { 
-          error: refreshError.message,
-          status: refreshError.response?.status,
-          data: refreshError.response?.data
+          error: apiError.message,
+          status: apiError.response?.status,
+          data: apiError.response?.data
         });
-        processQueue(refreshError);
+        processQueue(apiError);
         clearAuthData();
         window.location.href = '/login';
-        return Promise.reject(refreshError);
+        return Promise.reject(apiError);
       }
     }
 

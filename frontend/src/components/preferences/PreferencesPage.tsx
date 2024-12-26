@@ -12,6 +12,7 @@ import {
   ScrollArea,
   Title,
   useMantineColorScheme,
+  ActionIcon,
 } from '@mantine/core';
 import { IconMoonStars, IconSun, IconRefresh } from '@tabler/icons-react';
 import apiService from '../../services/api';
@@ -21,6 +22,15 @@ interface DebugMessage {
   id: number;
   message: string;
   timestamp: string;
+}
+
+interface ApiError {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+  message: string;
 }
 
 export function PreferencesPage() {
@@ -113,8 +123,9 @@ export function PreferencesPage() {
       localStorage.setItem('theme', theme);
       setColorScheme(theme);
       setSaveStatus('success');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error || error.message;
+    } catch (error) {
+      const apiError = error as ApiError;
+      const errorMessage = apiError.response?.data?.error || apiError.message;
       addDebugMessage('Failed to save preferences: ' + errorMessage);
       console.error('Failed to save preferences:', errorMessage);
       setSaveStatus('error');

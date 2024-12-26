@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, Table, Title, Badge, Text, Group, Alert, LoadingOverlay } from '@mantine/core';
+import { Card, Table, Title, Badge, Text, Alert, LoadingOverlay } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
 import apiService from '../../services/api';
 
