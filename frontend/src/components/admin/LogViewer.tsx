@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { Box, Text, ScrollArea } from '@mantine/core';
-import api from '../../api/axios';
+import apiService from '../../services/api';
 
 interface LogViewerProps {
   logFile: string;
@@ -33,17 +33,17 @@ export function LogViewer({ logFile, onDebugMessage }: LogViewerProps) {
   const fetchLogContent = async () => {
     try {
       addDebugMessage(`Fetching content for log file: ${logFile}`);
-      const response = await api.get(`/logs/${logFile}/content`);
+      const response = await apiService.getLogContent(logFile);
       addDebugMessage(`Received response for ${logFile}`);
       
-      if (response.data && Array.isArray(response.data.content)) {
-        setLogLines(response.data.content);
-        addDebugMessage(`Loaded ${response.data.content.length} lines from ${logFile}`);
+      if (response && Array.isArray(response.content)) {
+        setLogLines(response.content);
+        addDebugMessage(`Loaded ${response.content.length} lines from ${logFile}`);
         setError(null);
       } else {
         throw new Error('Invalid response format');
       }
-      
+
       // Auto-scroll to bottom if already at bottom
       if (scrollRef.current) {
         const { scrollHeight, scrollTop, clientHeight } = scrollRef.current;

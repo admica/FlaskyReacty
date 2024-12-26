@@ -1,12 +1,11 @@
 // PATH: src/components/auth/SessionTimeoutProvider.tsx
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Modal, Button, Progress, Text } from '@mantine/core';
+import { Modal, Button, Progress, Text, Group } from '@mantine/core';
 import apiService from '../../services/api';
 
 interface SessionContextType {
-    resetSession: () => void;
     logout: () => void;
 }
 
@@ -20,138 +19,163 @@ export const useSession = () => {
     return context;
 };
 
-const SESSION_TIMEOUT = 15 * 60 * 1000; // 15 minutes
-const WARNING_TIME = 60 * 1000; // 1 minute warning
-const REFRESH_BEFORE = 2 * 60 * 1000; // Refresh 2 minutes before expiry
+// Constants for timing (in milliseconds)
+const INITIAL_DELAY = 13 * 60 * 1000 + 58 * 1000; // 13 minutes and 58 seconds
+const WARNING_TIME = 60 * 1000;                   // 1 minute countdown
+const TOKEN_EXPIRES = 15 * 60 * 1000;             // 15 minute total lifetime
 
-export const SessionTimeoutProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const navigate = useNavigate();
+// Debug logging function
+const debug = (message: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    const logMessage = data 
+        ? `[SessionTimeout] ${message} | ${JSON.stringify(data)}`
+        : `[SessionTimeout] ${message}`;
+    console.debug(`${timestamp} ${logMessage}`);
+    const debugHandler = (window as any).addDebugMessage;
+    if (typeof debugHandler === 'function') {
+        debugHandler(logMessage);
+    }
+};
+
+export function SessionTimeoutProvider({ children }: { children: React.ReactNode }) {
     const [showWarning, setShowWarning] = useState(false);
     const [timeLeft, setTimeLeft] = useState(WARNING_TIME);
-    const [warningTimer, setWarningTimer] = useState<NodeJS.Timeout>();
-    const [sessionTimer, setSessionTimer] = useState<NodeJS.Timeout>();
-    const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout>();
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const warningTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const countdownRef = useRef<NodeJS.Timeout | null>(null);
+    const navigate = useNavigate();
 
-    const performTokenRefresh = async () => {
-        try {
-            await apiService.refreshToken();
-            console.log('Token refreshed successfully');
-            return true;
-        } catch (error) {
-            console.error('Failed to refresh token:', error);
-            return false;
+    const clearTimers = useCallback(() => {
+        debug('Clearing timers');
+        if (warningTimerRef.current) {
+            clearTimeout(warningTimerRef.current);
+            warningTimerRef.current = null;
         }
-    };
+        if (countdownRef.current) {
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+        }
+        setTimeLeft(WARNING_TIME);
+    }, []);
 
-    const resetSession = async () => {
-        if (warningTimer) clearInterval(warningTimer);
-        if (sessionTimer) clearTimeout(sessionTimer);
-        if (refreshTimer) clearTimeout(refreshTimer);
+    const logout = useCallback(async () => {
+        debug('Logging out');
+        clearTimers();
+        setShowWarning(false);
+        try {
+            await apiService.logout();
+            debug('Logout successful');
+        } catch (error) {
+            debug('Error during logout', { error });
+        }
+        navigate('/login');
+    }, [navigate, clearTimers]);
 
-        // Set up token refresh before expiry
-        const newRefreshTimer = setTimeout(() => {
-            performTokenRefresh().then(success => {
-                if (success) {
-                    resetSession(); // Reset timers after successful refresh
-                }
-            });
-        }, SESSION_TIMEOUT - REFRESH_BEFORE);
+    const startWarningTimer = useCallback(() => {
+        debug('Starting warning timer');
+        clearTimers();
 
-        // Set up session warning
-        const newSessionTimer = setTimeout(() => {
+        // Show warning after INITIAL_DELAY
+        warningTimerRef.current = setTimeout(() => {
+            debug('Showing warning popup');
             setShowWarning(true);
-            const newWarningTimer = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1000) {
+            setTimeLeft(WARNING_TIME);
+
+            // Start countdown
+            countdownRef.current = setInterval(() => {
+                setTimeLeft(prev => {
+                    const newTime = prev - 1000;
+                    debug('Countdown update', { timeLeft: newTime / 1000 });
+                    if (newTime <= 0) {
+                        debug('Countdown finished - logging out');
+                        clearInterval(countdownRef.current!);
+                        countdownRef.current = null;
                         logout();
                         return 0;
                     }
-                    return prev - 1000;
+                    return newTime;
                 });
             }, 1000);
-            setWarningTimer(newWarningTimer);
-        }, SESSION_TIMEOUT - WARNING_TIME);
+        }, INITIAL_DELAY);
+    }, [clearTimers, logout]);
 
-        setRefreshTimer(newRefreshTimer);
-        setSessionTimer(newSessionTimer);
-        setTimeLeft(WARNING_TIME);
+    const extendSession = useCallback(async () => {
+        if (isRefreshing) return;
+        
+        debug('Extending session');
+        setIsRefreshing(true);
+        clearTimers();
         setShowWarning(false);
-    };
-
-    const logout = () => {
-        if (warningTimer) clearInterval(warningTimer);
-        if (sessionTimer) clearTimeout(sessionTimer);
-        if (refreshTimer) clearTimeout(refreshTimer);
-        localStorage.removeItem('token');
-        localStorage.removeItem('refresh_token');
-        navigate('/login');
-    };
-
-    const extendSession = async () => {
-        const success = await performTokenRefresh();
-        if (success) {
-            resetSession();
-        } else {
+        
+        try {
+            await apiService.refreshToken();
+            debug('Session extended successfully');
+            startWarningTimer();
+        } catch (error) {
+            debug('Failed to extend session', { error });
             logout();
+        } finally {
+            setIsRefreshing(false);
         }
-    };
+    }, [isRefreshing, clearTimers, logout, startWarningTimer]);
 
+    // Start timer when component mounts or after login
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            resetSession();
+        const accessToken = localStorage.getItem('access_token');
+        if (accessToken) {
+            debug('Access token found - starting session timer');
+            startWarningTimer();
+        } else {
+            debug('No access token found');
         }
-
-        const events = ['mousedown', 'keydown', 'scroll', 'mousemove'];
-        const resetOnActivity = () => {
-            const token = localStorage.getItem('token');
-            if (token && !showWarning) {
-                resetSession();
-            }
-        };
-
-        events.forEach(event => {
-            window.addEventListener(event, resetOnActivity);
-        });
-
-        return () => {
-            if (warningTimer) clearInterval(warningTimer);
-            if (sessionTimer) clearTimeout(sessionTimer);
-            if (refreshTimer) clearTimeout(refreshTimer);
-            events.forEach(event => {
-                window.removeEventListener(event, resetOnActivity);
-            });
-        };
-    }, []);
+        return clearTimers;
+    }, [startWarningTimer, clearTimers]);
 
     return (
-        <SessionContext.Provider value={{ resetSession, logout }}>
+        <SessionContext.Provider value={{ logout }}>
+            {showWarning && (
+                <Modal
+                    opened={true}
+                    onClose={() => {}}
+                    withCloseButton={false}
+                    closeOnClickOutside={false}
+                    closeOnEscape={false}
+                    title="Session Timeout Warning"
+                >
+                    <Text size="sm" mb="md">
+                        Your session will expire in {Math.ceil(timeLeft / 1000)} seconds.
+                    </Text>
+                    <Progress
+                        value={(timeLeft / WARNING_TIME) * 100}
+                        mb="md"
+                        color="blue"
+                    />
+                    <Group position="right" mt="md">
+                        <Button 
+                            variant="outline" 
+                            color="red" 
+                            onClick={() => {
+                                debug('User clicked "Logout Now"');
+                                logout();
+                            }}
+                            disabled={isRefreshing}
+                        >
+                            Logout Now
+                        </Button>
+                        <Button 
+                            onClick={() => {
+                                debug('User clicked "Stay Connected"');
+                                extendSession();
+                            }}
+                            loading={isRefreshing}
+                            disabled={isRefreshing}
+                        >
+                            Stay Connected
+                        </Button>
+                    </Group>
+                </Modal>
+            )}
             {children}
-            <Modal
-                opened={showWarning}
-                onClose={() => {}}
-                title="Session Timeout Warning"
-                closeOnClickOutside={false}
-                closeOnEscape={false}
-                withCloseButton={false}
-            >
-                <Text size="sm" mb="md">
-                    Your session will expire in {Math.ceil(timeLeft / 1000)} seconds.
-                </Text>
-                <Progress
-                    value={(timeLeft / WARNING_TIME) * 100}
-                    mb="md"
-                    color="blue"
-                />
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }}>
-                    <Button variant="outline" color="red" onClick={logout} fullWidth>
-                        Logout Now
-                    </Button>
-                    <Button onClick={extendSession} fullWidth>
-                        Stay Connected
-                    </Button>
-                </div>
-            </Modal>
         </SessionContext.Provider>
     );
-}; 
+} 

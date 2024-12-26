@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Table, Group, Text, Paper, Select, UnstyledButton, Center } from '@mantine/core';
 import { IconChevronUp, IconChevronDown, IconSelector } from '@tabler/icons-react';
-import api from '../../api/axios';
+import apiService from '../../services/api';
 
 interface LocationCount {
   src_location: string;
@@ -68,10 +68,14 @@ export function NetworkTable({
   useEffect(() => {
     const loadLocations = async () => {
       try {
-        const response = await api.get('/api/v1/network/locations');
-        setLocations(response.data.locations);
+        const response = await apiService.getLocations();
+        if (response && Array.isArray(response.locations)) {
+          setLocations(response.locations);
+        } else {
+          console.error('Invalid locations response format');
+        }
       } catch (error) {
-        console.error('Failed to load locations:', error);
+        console.error('Error loading locations:', error);
       }
     };
     loadLocations();
@@ -86,10 +90,16 @@ export function NetworkTable({
         if (sourceFilter) params.append('src', sourceFilter);
         if (destFilter) params.append('dst', destFilter);
         
-        const response = await api.get(`/api/v1/subnet-location-counts?${params.toString()}`);
-        setLocationCounts(response.data);
+        const response = await apiService.getLocationCounts(params.toString());
+        if (response && Array.isArray(response.counts)) {
+          setLocationCounts(response.counts);
+        } else {
+          console.error('Invalid location counts response format');
+          setLocationCounts([]);
+        }
       } catch (error) {
-        console.error('Failed to load location counts:', error);
+        console.error('Error loading location counts:', error);
+        setLocationCounts([]);
       } finally {
         setLoading(false);
       }

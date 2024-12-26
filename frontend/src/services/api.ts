@@ -130,7 +130,7 @@ export interface HealthSummary {
 
 // Create axios instance
 export const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -139,6 +139,11 @@ export const api = axios.create({
 // Token refresh state
 let isRefreshing = false;
 let failedQueue: any[] = [];
+let disableAutoRefresh = false;  // Flag to control auto-refresh
+
+export const setDisableAutoRefresh = (disable: boolean) => {
+    disableAutoRefresh = disable;
+};
 
 const processQueue = (error: any, token: string | null = null) => {
   debug(`Processing queued requests (${failedQueue.length} requests)${error ? ' with error' : ''}`);
@@ -152,9 +157,9 @@ const processQueue = (error: any, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Create a separate axios instance for refresh requests
+// Create a separate axios instance for refresh requests to avoid interceptor loops
 const refreshApi = axios.create({
-  baseURL: '/api/v1',
+  baseURL: (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -180,10 +185,17 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      debug('Received 401 error, attempting token refresh', {
+      debug('Received 401 error, checking if auto-refresh is enabled', {
         url: originalRequest.url,
-        isRefreshing
+        isRefreshing,
+        disableAutoRefresh
       });
+
+      // Don't auto-refresh if disabled (for session timeout)
+      if (disableAutoRefresh) {
+        debug('Auto-refresh disabled, rejecting request');
+        return Promise.reject(error);
+      }
 
       if (isRefreshing) {
         debug('Token refresh already in progress, queueing request');
@@ -381,6 +393,12 @@ const apiService = {
     return response.data;
   },
 
+  async getLocationCounts(queryParams: string) {
+    debug('Fetching location counts', { queryParams });
+    const response = await api.get(`/subnet-location-counts${queryParams ? `?${queryParams}` : ''}`);
+    return response.data;
+  },
+
   async getConnections() {
     debug('Fetching network connections');
     const response = await api.get<{ connections: ApiConnection[] }>('/network/connections');
@@ -419,8 +437,14 @@ const apiService = {
   },
 
   async getLogs() {
-    debug('Fetching logs');
+    debug('Fetching all logs');
     const response = await api.get('/logs');
+    return response.data;
+  },
+
+  async getLogContent(logFile: string) {
+    debug(`Fetching content for log file: ${logFile}`);
+    const response = await api.get(`/logs/${logFile}/content`);
     return response.data;
   },
 
