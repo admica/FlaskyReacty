@@ -108,9 +108,9 @@ def get_health_summary():
         location_stats = db("""
             SELECT 
                 s.location,
-                COUNT(*) FILTER (WHERE s.status = 'Online') as sensors_online,
-                COUNT(*) FILTER (WHERE s.status = 'Offline') as sensors_offline,
-                COUNT(*) FILTER (WHERE s.status = 'Degraded') as sensors_degraded,
+                COUNT(DISTINCT s.name) FILTER (WHERE s.status = 'Online') as sensors_online,
+                COUNT(DISTINCT s.name) FILTER (WHERE s.status = 'Offline') as sensors_offline,
+                COUNT(DISTINCT s.name) FILTER (WHERE s.status = 'Degraded') as sensors_degraded,
                 COUNT(d.*) FILTER (WHERE d.status = 'Online') as devices_online,
                 COUNT(d.*) FILTER (WHERE d.status = 'Offline') as devices_offline,
                 COUNT(d.*) FILTER (WHERE d.status = 'Degraded') as devices_degraded,

@@ -273,21 +273,25 @@ export function HealthSummaryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {summaries[0]?.performance_metrics?.location_stats && Object.entries(summaries[0].performance_metrics.location_stats).map(([location, stats]: [string, any]) => {
+                    {summaries[0]?.performance_metrics?.location_stats && 
+                      Object.entries(summaries[0].performance_metrics.location_stats)
+                        .sort(([locA], [locB]) => locA.localeCompare(locB))
+                        .map(([location, stats]: [string, any]) => {
                       const totalSensors = (stats.sensors_online || 0) + (stats.sensors_offline || 0);
                       const totalDevices = (stats.devices_online || 0) + (stats.devices_offline || 0);
                       
                       let healthScore = 0;
-                      if (totalSensors > 0 || totalDevices > 0) {
-                        const sensorScore = totalSensors > 0 ? ((stats.sensors_online || 0) / totalSensors) * 100 : 0;
-                        const deviceScore = totalDevices > 0 ? ((stats.devices_online || 0) / totalDevices) * 100 : 0;
-                        const diskScore = 100 - (stats.disk_usage || 0); // Higher score for lower disk usage
+                      if (totalSensors > 0) {
+                        // First check if sensors are online
+                        const sensorScore = ((stats.sensors_online || 0) / totalSensors) * 100;
                         
-                        // Weight the scores: sensors (40%), devices (40%), disk usage (20%)
+                        // Then check if all devices for online sensors are also online
+                        const deviceScore = stats.sensors_online > 0 ? 
+                          ((stats.devices_online || 0) / (stats.devices_online + stats.devices_offline)) * 100 : 0;
+                        
+                        // A location is only 100% healthy if all sensors are online AND all their devices are online
                         healthScore = Math.round(
-                          (sensorScore * 0.4) + 
-                          (deviceScore * 0.4) + 
-                          (diskScore * 0.2)
+                          (sensorScore + deviceScore) / 2
                         );
                       }
                       
@@ -310,7 +314,7 @@ export function HealthSummaryPage() {
                               >
                                 {stats.sensors_offline || 0} offline
                               </Badge>
-                              <Text size="xs" c="dimmed">Total: {stats.sensors_online + stats.sensors_offline}</Text>
+                              <Text size="xs" c="dimmed">Total: {(stats.sensors_online || 0) + (stats.sensors_offline || 0)}</Text>
                             </Group>
                           </td>
                           <td>
@@ -333,20 +337,11 @@ export function HealthSummaryPage() {
                             </Group>
                           </td>
                           <td>
-                            <Group spacing={4}>
-                              <Text size="sm">Dst: {stats.dst_subnets || 0}</Text>
-                              <Text size="xs" c="dimmed">(Unique: {stats.unique_subnets || 0})</Text>
-                            </Group>
+                            <Text size="sm">{stats.unique_subnets || 0} subnets</Text>
                           </td>
                           <td>
                             <Group spacing={4}>
                               <Text size="sm">PCAP: {Math.round((stats.pcap_minutes || 0) / 60)}h</Text>
-                              <Text 
-                                size="sm" 
-                                c={stats.disk_usage > 80 ? 'red' : stats.disk_usage > 60 ? 'yellow' : 'green'}
-                              >
-                                Disk: {stats.disk_usage || 0}%
-                              </Text>
                             </Group>
                           </td>
                           <td>
