@@ -148,7 +148,7 @@ export function HealthSummaryPage() {
   return (
     <>
       <Box p="md">
-        <Stack spacing="md">
+        <Stack gap="md">
           <Group justify="space-between">
             <Title order={2}>Sensor Health Summary</Title>
             <Box>
@@ -191,16 +191,16 @@ export function HealthSummaryPage() {
                 <Stack>
                   <Title order={3}>Sensors Status</Title>
                   <Group justify="space-between" align="flex-start">
-                    <Stack spacing="xs">
-                      <Group spacing="xs" noWrap>
+                    <Stack gap="xs">
+                      <Group gap="xs" wrap="nowrap">
                         <Text size="sm" w={70}>Online</Text>
                         <Badge size="lg" color="green">{aggregatedData.sensors.online}</Badge>
                       </Group>
-                      <Group spacing="xs" noWrap>
+                      <Group gap="xs" wrap="nowrap">
                         <Text size="sm" w={70}>Offline</Text>
                         <Badge size="lg" color="red">{aggregatedData.sensors.offline}</Badge>
                       </Group>
-                      <Group spacing="xs" noWrap>
+                      <Group gap="xs" wrap="nowrap">
                         <Text size="sm" w={70}>Degraded</Text>
                         <Badge size="lg" color="yellow">{aggregatedData.sensors.degraded}</Badge>
                       </Group>
@@ -209,7 +209,7 @@ export function HealthSummaryPage() {
                       size={120}
                       thickness={12}
                       label={
-                        <Text size="xs" align="center">
+                        <Text size="xs" ta="center">
                           {aggregatedData.sensors.total}
                           <Text size="xs" color="dimmed">Total</Text>
                         </Text>
@@ -231,16 +231,16 @@ export function HealthSummaryPage() {
                 <Stack>
                   <Title order={3}>Devices Status</Title>
                   <Group justify="space-between" align="flex-start">
-                    <Stack spacing="xs">
-                      <Group spacing="xs" noWrap>
+                    <Stack gap="xs">
+                      <Group gap="xs" wrap="nowrap">
                         <Text size="sm" w={70}>Online</Text>
                         <Badge size="lg" color="green">{aggregatedData.devices.online}</Badge>
                       </Group>
-                      <Group spacing="xs" noWrap>
+                      <Group gap="xs" wrap="nowrap">
                         <Text size="sm" w={70}>Offline</Text>
                         <Badge size="lg" color="red">{aggregatedData.devices.offline}</Badge>
                       </Group>
-                      <Group spacing="xs" noWrap>
+                      <Group gap="xs" wrap="nowrap">
                         <Text size="sm" w={70}>Degraded</Text>
                         <Badge size="lg" color="yellow">{aggregatedData.devices.degraded}</Badge>
                       </Group>
@@ -249,7 +249,7 @@ export function HealthSummaryPage() {
                       size={120}
                       thickness={12}
                       label={
-                        <Text size="xs" align="center">
+                        <Text size="xs" ta="center">
                           {aggregatedData.devices.total}
                           <Text size="xs" color="dimmed">Total</Text>
                         </Text>
@@ -307,7 +307,7 @@ export function HealthSummaryPage() {
                           <tr key={location}>
                             <td>{location}</td>
                             <td>
-                              <Group spacing={4}>
+                              <Group gap={4}>
                                 <Badge 
                                   color={stats.sensors_online > 0 ? 'green' : 'gray.7'} 
                                   size="sm"
@@ -326,7 +326,7 @@ export function HealthSummaryPage() {
                               </Group>
                             </td>
                             <td>
-                              <Group spacing={4}>
+                              <Group gap={4}>
                                 <Badge 
                                   color={stats.devices_online > 0 ? 'green' : 'gray.7'} 
                                   size="sm"
@@ -348,7 +348,7 @@ export function HealthSummaryPage() {
                               <Text size="sm">{stats.unique_subnets || 0} subnets</Text>
                             </td>
                             <td>
-                              <Group spacing={4}>
+                              <Group gap={4}>
                                 <Text size="sm">PCAP: {Math.round((stats.pcap_minutes || 0) / 60)}h</Text>
                               </Group>
                             </td>
@@ -413,7 +413,7 @@ export function HealthSummaryPage() {
                     <Grid.Col span={6}>
                       <Stack align="center">
                         <Title order={4}>Network Activity</Title>
-                        <Group spacing="xl">
+                        <Group gap="xl">
                           <Stack align="center">
                             <Text size="sm" color="dimmed">Unique Subnets</Text>
                             <Text size="xl">{aggregatedData.performance.unique_subnets}</Text>
@@ -428,7 +428,7 @@ export function HealthSummaryPage() {
                     <Grid.Col span={6}>
                       <Stack align="center">
                         <Title order={4}>Storage Health</Title>
-                        <Group spacing="xl">
+                        <Group gap="xl">
                           <Stack align="center">
                             <Text size="sm" color="dimmed">PCAP Retention</Text>
                             <Text size="xl">{Math.round(aggregatedData.metrics.avg_pcap_minutes / 60)}h</Text>

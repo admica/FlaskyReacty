@@ -1,5 +1,6 @@
 """
 Subnet mapping endpoints for the PCAP Server API
+PATH: api/subnet_mapping.py
 """
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required

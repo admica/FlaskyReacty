@@ -1,5 +1,6 @@
 """
 Job submission and management endpoints
+PATH: api/jobs.py
 """
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt

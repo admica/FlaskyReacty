@@ -136,25 +136,22 @@ export function PreferencesPage() {
     }
   };
 
-  const handleThemeChange = async (newTheme: 'light' | 'dark') => {
-    addDebugMessage('Changing theme to: ' + newTheme);
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    setColorScheme(newTheme);
-    
-    const preferences: UserPreferences = {
-      theme: newTheme,
-      avatar_seed: avatarSeed,
-      settings: {}
-    };
-    
+  const handleThemeChange = async (value: string) => {
+    const newTheme = value as 'light' | 'dark';
     try {
-      await apiService.savePreferences(preferences);
-      addDebugMessage('Theme preference saved to backend');
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      addDebugMessage('Failed to save theme preference: ' + errorMessage);
-      console.error('Failed to save theme preference:', error);
+      setLoading(true);
+      addDebugMessage(`Changing theme to ${newTheme}...`);
+      await apiService.savePreferences({ theme: newTheme, avatar_seed: avatarSeed, settings: {} });
+      setTheme(newTheme);
+      localStorage.setItem('theme', newTheme);
+      setColorScheme(newTheme);
+      addDebugMessage('Theme updated successfully');
+    } catch (err) {
+      const error = err as ApiError;
+      console.error('Error updating theme:', error);
+      addDebugMessage(`Error updating theme: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 

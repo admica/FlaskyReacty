@@ -1,5 +1,6 @@
 """
 Admin endpoints for the PCAP Server API
+PATH: api/admin.py
 """
 import psutil
 import os

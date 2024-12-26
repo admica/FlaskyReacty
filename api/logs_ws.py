@@ -1,5 +1,6 @@
 """
 WebSocket endpoints for log tailing functionality
+PATH: api/logs_ws.py
 """
 from flask import Blueprint, current_app
 from flask_sock import Sock, ConnectionClosed

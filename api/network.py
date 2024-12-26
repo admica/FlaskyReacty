@@ -1,5 +1,6 @@
 """
 Network visualization endpoints for the PCAP Server API
+PATH: api/network.py
 """
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required

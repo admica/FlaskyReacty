@@ -1,5 +1,6 @@
 """
 Storage status endpoints for the PCAP Server API
+PATH: api/storage.py
 """
 import psutil
 import os

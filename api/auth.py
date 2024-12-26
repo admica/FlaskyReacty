@@ -1,5 +1,6 @@
 """
 Authentication endpoints and functionality for the PCAP Server API
+PATH: api/auth.py
 """
 from flask import Blueprint, jsonify, request, Response
 from flask_jwt_extended import (

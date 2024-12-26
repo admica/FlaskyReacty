@@ -1,5 +1,6 @@
 """
 Log management endpoints for the PCAP Server API
+PATH: api/logs.py
 """
 import os
 import glob

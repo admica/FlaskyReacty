@@ -1,5 +1,6 @@
 """
 Sensor management endpoints and functionality for the PCAP Server API
+PATH: api/sensors.py
 """
 from flask import Blueprint, jsonify, request, Response
 from flask_jwt_extended import jwt_required, get_jwt
