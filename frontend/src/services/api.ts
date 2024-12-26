@@ -105,6 +105,29 @@ export interface JobSubmitData {
   };
 }
 
+export interface HealthSummary {
+  timestamp: string;
+  duration_seconds: number;
+  sensors: {
+    total: number;
+    online: number;
+    offline: number;
+    degraded: number;
+  };
+  devices: {
+    total: number;
+    online: number;
+    offline: number;
+    degraded: number;
+  };
+  metrics: {
+    avg_pcap_minutes: number;
+    avg_disk_usage_pct: number;
+  };
+  errors: string[];
+  performance_metrics: Record<string, any>;
+}
+
 // Create axios instance
 export const api = axios.create({
   baseURL: '/api/v1',
@@ -424,6 +447,16 @@ const apiService = {
   async savePreferences(data: any) {
     debug('Saving user preferences', data);
     const response = await api.post('/preferences', data);
+    return response.data;
+  },
+
+  async getHealthSummary(params?: { start_time?: string; end_time?: string }) {
+    debug('Fetching health summary data', params);
+    const queryParams = new URLSearchParams();
+    if (params?.start_time) queryParams.append('start_time', params.start_time);
+    if (params?.end_time) queryParams.append('end_time', params.end_time);
+    const url = `/health/summary${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const response = await api.get(url);
     return response.data;
   },
 };

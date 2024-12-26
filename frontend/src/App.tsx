@@ -11,6 +11,7 @@ import { JobAnalysis } from '@/components/jobs/JobAnalysis';
 import { AdminPage } from '@/components/admin/AdminPage';
 import { NetworkPage } from '@/components/network/NetworkPage';
 import { PreferencesPage } from '@/components/preferences/PreferencesPage';
+import { HealthSummaryPage } from '@/components/health/HealthSummaryPage';
 
 function App() {
   return (
@@ -71,6 +72,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PreferencesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/health"
+          element={
+            <ProtectedRoute>
+              <HealthSummaryPage />
             </ProtectedRoute>
           }
         />
