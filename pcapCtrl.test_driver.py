@@ -404,13 +404,33 @@ class MockPcapCtrl:
 
     def get_response(self, command: str) -> str:
         """Return the mock response for a given command."""
-        if command not in self.responses:
-            return f"Error: Unknown command '{command}'"
+        # Handle basic commands
+        if command == "0" or command == "6":
+            return json.dumps(self.responses[command])
 
-        response = self.responses[command]
-        if isinstance(response, dict):
-            return json.dumps(response)
-        return response
+        # Handle subnet commands with limits
+        try:
+            cmd_type, limit = command.split(',')
+            limit = int(limit)
+
+            if cmd_type in ["3", "4", "5"]:
+                if cmd_type == "3":
+                    subnets = self.all_subnets
+                elif cmd_type == "4":
+                    subnets = self.src_subnets
+                else:  # cmd_type == "5"
+                    subnets = self.dst_subnets
+
+                # Apply limit if specified
+                if limit > 0:
+                    subnets = subnets[:limit]
+
+                return self._format_subnet_response(cmd_type, subnets)
+
+        except (ValueError, IndexError):
+            pass
+
+        return f"Error: Unknown command '{command}'"
 
 def parse_args(args):
     # Create parser without help option

@@ -537,26 +537,37 @@ class SensorMonitor:
                 if not connected:
                     return 'Offline'
 
-                # Check if agent.py is running and get disk space in one command
-                cmd = "pgrep -f 'agent.py' >/dev/null && df -h /pcap | tail -n1 | awk '{print $4,$5}'"
+                # Check if run_job.py is running and get disk space in one command
+                cmd = "ps aux | grep -c '[r]un_job.py'; df -h /pcap | tail -n1 | awk '{print $4,$5}'"
                 _, stdout, _ = ssh.exec_command(cmd, timeout=5)
                 output = stdout.read().decode().strip()
 
-                if output:  # agent.py is running
+                if output:
+                    lines = output.splitlines()
+                    # Last line is always disk space
+                    disk_space = lines[-1] if lines else ""
+                    # First line is the count of run_job.py processes
+                    job_count = int(lines[0]) if lines else 0
+                    logger.debug(f"Found {job_count} run_job.py processes on {sensor_fqdn}")
+
                     try:
-                        _, used_pct = output.split()
+                        avail, used_pct = disk_space.split()
                         used_pct = int(used_pct.rstrip('%'))
 
-                        if used_pct >= 90:  # High disk usage
+                        if job_count > 0:
+                            logger.debug(f"Sensor {sensor_fqdn} is Busy with {job_count} run_job.py processes")
+                            return 'Busy'
+                        elif used_pct >= 98:
                             logger.debug(f"High disk usage on {sensor_fqdn}: {used_pct}%")
                             return 'Degraded'
+                        else:
+                            return 'Online'
 
-                        return 'Busy'  # agent.py running means sensor is busy
                     except (ValueError, IndexError) as e:
-                        logger.error(f"Error parsing disk space output '{output}': {e}")
+                        logger.error(f"Error parsing disk space output '{disk_space}': {e}")
                         return 'Degraded'
-
-                return 'Online'  # agent.py not running, disk space ok
+                else:
+                    return 'Online'  # No output means no run_job.py running, disk space command failed
 
             except Exception as e:
                 logger.error(f"SSH connection failed for {sensor_fqdn}: {e}")
@@ -570,7 +581,7 @@ class SensorMonitor:
             logger.error(f"Error checking sensor status: {e}")
             return 'Offline'
 
-def check_all_sensors_status(self):
+    def check_all_sensors_status(self):
         """Check basic connectivity and status of all sensors"""
         logger.info("Starting sensor status check")
         conn = psycopg2.connect(**self.db_params)
@@ -685,7 +696,7 @@ def check_all_sensors_status(self):
             cur.close()
             conn.close()
 
-def update_subnet_location_map(self, cur, location: str):
+    def update_subnet_location_map(self, cur, location: str):
         """Update subnet_location_map based on loc_src and loc_dst tables for a location"""
         try:
             location = location.strip().upper()
@@ -808,7 +819,7 @@ def update_subnet_location_map(self, cur, location: str):
             summary.add_error("subnet_update", str(e))
             raise
 
-def run_maintenance_tasks(self):
+    def run_maintenance_tasks(self):
         """Run periodic maintenance tasks"""
         logger.info("Starting maintenance tasks")
         conn = psycopg2.connect(**self.db_params)
