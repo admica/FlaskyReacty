@@ -13,11 +13,6 @@ case $MODE in
     export NODE_ENV="development"
     npm run dev
     ;;
-  "reset")
-    echo "Resetting Apache config hostname to placeholder..."
-    sed -i 's/.*SetEnvIf Origin.*/    SetEnvIf Origin "^https:\/\/(VAR_PRODUCTION\.DOMAIN)$" ORIGIN=$0/' "${BASE_DIR}/etc/99-pcapserver.conf"
-    echo "Apache config restored to placeholder value."
-    ;;
   "build"|"prod"|"production")
     echo "Running production build..."
     export NODE_ENV="production"
@@ -39,10 +34,9 @@ case $MODE in
   *)
     echo "Invalid mode: $MODE"
     echo "==========================="
-    echo "Usage: $0 [dev|build|reset]"
+    echo "Usage: $0 [dev|build]"
     echo "  dev   - Run in development mode"
     echo "  build - Build for production"
-    echo "  reset - Reset Apache config to use placeholder"
     echo "Default: build"
     echo "==========================="
     exit 1

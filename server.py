@@ -278,8 +278,10 @@ def after_request(response):
     with request_count_lock:
         request_count -= 1
 
-    # Allow CORS from frontend
-    response.headers['Access-Control-Allow-Origin'] = 'https://localhost:5173'
+    # Allow CORS from frontend (both dev and prod)
+    origin = request.headers.get('Origin')
+    if origin in ['https://localhost:5173', 'https://localhost:5000']:
+        response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
 
