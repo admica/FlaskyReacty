@@ -439,3 +439,41 @@ def refresh():
     except Exception as e:
         logger.error(f"Refresh error: {e}")
         return jsonify({"error": "Token refresh failed"}), 500
+
+@auth_bp.route('/api/v1/users/sessions', methods=['GET'])
+@jwt_required()
+@rate_limit()
+def get_user_sessions():
+    """Get list of active sessions for the current user"""
+    try:
+        username = get_jwt_identity()
+        current_token = get_jwt()['jti']  # JWT ID of current token
+        
+        # Get active sessions for the user
+        rows = db("""
+            SELECT 
+                username,
+                created_at,
+                expires_at,
+                session_token
+            FROM user_sessions
+            WHERE username = %s
+              AND expires_at > NOW()
+            ORDER BY created_at DESC
+        """, [username])
+        
+        # Format response
+        sessions = [{
+            'username': row[0],
+            'created_at': row[1].isoformat() if row[1] else None,
+            'expires_at': row[2].isoformat() if row[2] else None,
+            'is_current': True if row[0] == username else False  # Current user's sessions
+        } for row in rows]
+        
+        return jsonify({
+            'sessions': sessions
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting user sessions: {e}")
+        return jsonify({"error": "Failed to get user sessions"}), 500
