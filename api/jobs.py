@@ -102,7 +102,7 @@ def submit_job():
         if errors: return jsonify({"errors": errors}), 400
 
         location = job['location']
-        
+
         # Get or create job queue for location
         queue, error = location_manager.get_location_queue(location)
 
@@ -218,7 +218,7 @@ def get_all_jobs():
     try:
         # Get username from query params
         username = request.args.get('username')
-        
+
         # Build base query
         query = """
             SELECT 
@@ -244,19 +244,19 @@ def get_all_jobs():
             FROM jobs j
             LEFT JOIN tasks t ON t.job_id = j.id
         """
-        
+
         # Add username filter if provided
         params = []
         if username:
             query += " WHERE j.submitted_by = %s"
             params.append(username)
-            
+
         # Add group by and order by
         query += """
             GROUP BY j.id
             ORDER BY j.id DESC
         """
-        
+
         # Execute query
         jobs = db(query, params)
 

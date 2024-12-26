@@ -15,10 +15,10 @@ def run_maintenance_operations():
         try:
             # Run session cleanup every hour
             cleanup_old_sessions()
-            
+
             # Sleep for an hour
             time.sleep(3600)
-            
+
         except Exception as e:
             logger.error(f"Error in maintenance operations: {e}")
             logger.error(traceback.format_exc())

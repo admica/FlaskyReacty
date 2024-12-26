@@ -110,7 +110,7 @@ def get_location_sensors(location: str) -> list:
             AND status != 'Offline'
             ORDER BY name
         """, (location,))
-        
+
         return [{'name': row[0], 'fqdn': row[1]} for row in rows]
     except Exception as e:
         logger.error(f"Error getting sensors for location {location}: {e}")
@@ -162,26 +162,26 @@ def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict
         last_update_time = {name: time.time() for name in task_threads.keys()}
         QUEUE_TIMEOUT = 1.0  # 1 second timeout per queue check
         TASK_TIMEOUT = 1800  # 30 minutes before considering a task dead
-        
+
         while len(completed_tasks) < len(task_threads):
             current_time = time.time()
-            
+
             # Check each task that hasn't completed
             for sensor_name, queue in task_queues.items():
                 if sensor_name in completed_tasks:
                     continue
-                    
+
                 thread = task_threads[sensor_name]
-                
+
                 # Get task record ID
                 task_row = db("SELECT id FROM tasks WHERE job_id = %s AND sensor = %s", 
                             (job_id, sensor_name))
                 if not task_row:
                     logger.error(f"No task record found for {sensor_name}")
                     continue
-                    
+
                 task_id = task_row[0]
-                
+
                 # Check if thread died
                 if not thread.is_alive():
                     logger.error(f"Task thread for {sensor_name} died unexpectedly")
@@ -190,7 +190,7 @@ def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict
                                         {'message': 'Task thread died unexpectedly'})
                         completed_tasks.add(sensor_name)
                     continue
-                
+
                 # Check for task timeout
                 if (current_time - last_update_time[sensor_name] > TASK_TIMEOUT and 
                     sensor_name not in completed_tasks):
@@ -198,21 +198,21 @@ def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict
                     update_task_status(task_id, TASK_STATUS['FAILED'],
                                     {'message': f'Task timed out after {TASK_TIMEOUT/60:.0f} minutes'})
                     completed_tasks.add(sensor_name)
-                    
+
                     # Kill the timed out thread
                     if thread.is_alive():
                         logger.warning(f"Killing timed out task thread for {sensor_name}")
                         thread._stop()
                     continue
-                    
+
                 try:
                     # Check queue with timeout
                     status_update = queue.get(timeout=QUEUE_TIMEOUT)
                     last_update_time[sensor_name] = current_time
-                    
+
                     # Update task status in DB
                     update_task_status(task_id, status_update['status'], status_update.get('result'))
-                    
+
                     # If task is in final state
                     if status_update['status'] in [
                         TASK_STATUS['COMPLETE'], 
@@ -220,20 +220,20 @@ def monitor_tasks(job_id: int, task_queues: Dict[str, Queue], task_threads: Dict
                         TASK_STATUS['SKIPPED']
                     ]:
                         completed_tasks.add(sensor_name)
-                        
+
                 except Empty:
                     # No update from this queue, continue to next
                     continue
-            
+
             # Update job status based on task states
             update_job_status_from_tasks(job_id)
-            
+
             # Small sleep between queue check cycles
             time.sleep(0.1)
-        
+
         # All tasks have reported completion
         cleanup_tasks(task_threads)
-        
+
     except Exception as e:
         logger.error(f"Error monitoring tasks: {e}")
         update_job_failed(job_id, f"Error monitoring tasks: {e}")
@@ -272,7 +272,7 @@ def update_task_status(task_id: int, status: str, result: dict = None) -> None:
                     started_at = NOW()
                 WHERE id = %s
             """, (status, task_id))
-            
+
         elif status == TASK_STATUS['RETRIEVING']:
             # Use temp_path from result if provided
             temp_path = result.get('temp_path') if result else None
@@ -282,7 +282,7 @@ def update_task_status(task_id: int, status: str, result: dict = None) -> None:
                     temp_path = %s
                 WHERE id = %s
             """, (status, temp_path, task_id))
-            
+
         elif status in [TASK_STATUS['COMPLETE'], TASK_STATUS['FAILED'], TASK_STATUS['SKIPPED']]:
             db("""
                 UPDATE tasks 
@@ -318,22 +318,22 @@ def update_job_status_from_tasks(job_id: int) -> None:
             WHERE job_id = %s 
             GROUP BY status
         """, (job_id,))
-        
+
         status_counts = {row[0]: row[1] for row in rows}
         total_tasks = sum(status_counts.values())
-        
+
         # Get current job status
         job_row = db("SELECT status FROM jobs WHERE id = %s", (job_id,))
         if not job_row:
             logger.error(f"No job record found for ID {job_id}")
             return
-            
+
         current_status = job_row[0]
-        
+
         # Don't update if job is in Merging state
         if current_status == 'Merging':
             return
-            
+
         # Determine job status
         running_count = status_counts.get(TASK_STATUS['RUNNING'], 0)
         retrieving_count = status_counts.get(TASK_STATUS['RETRIEVING'], 0)
@@ -357,7 +357,7 @@ def update_job_status_from_tasks(job_id: int) -> None:
         else:
             status = 'Running'
             message = 'Tasks in progress'
-            
+
         # Update job status
         db("""
             UPDATE jobs 
@@ -374,7 +374,7 @@ def update_job_status_from_tasks(job_id: int) -> None:
                 END
             WHERE id = %s
         """, (status, message, status, status, job_id))
-            
+
     except Exception as e:
         logger.error(f"Error updating job {job_id} status: {e}")
 

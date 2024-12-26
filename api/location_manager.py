@@ -37,10 +37,10 @@ class LocationManager:
                     WHERE location = %s 
                     AND status != 'Offline'
                 """, (location,))
-                
+
                 if not sensors:
                     return None, f"No active sensors found for location {location}"
-                    
+
             except Exception as e:
                 logger.error(f"Error checking sensors for {location}: {e}")
                 return None, f"Database error checking sensors: {e}"
@@ -50,10 +50,10 @@ class LocationManager:
                 logger.info(f"Starting job processor for location: {location}")
                 proc = start_job_proc(location)
                 self._job_procs[location] = proc
-                
+
                 # Queue is created in start_job_proc
                 self._job_queues[location] = job_queues[location]
-                
+
                 return self._job_queues[location], ""
 
             except Exception as e:

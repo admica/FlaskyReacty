@@ -127,22 +127,18 @@ def create_user_session(username):
     """Create a new user session and return the session token"""
     try:
         session_token = str(uuid4())
+        logger.debug(f"Generated session token: {session_token}")
         retention_days = config.getint('SERVER', 'user_sessions_keep_days', fallback=30)
         expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
 
         # Insert new session record
-        result = db("""
+        db("""
             INSERT INTO user_sessions (username, session_token, expires_at)
             VALUES (%s, %s, %s)
-            RETURNING session_token
         """, (username, session_token, expires_at))
 
-        if result and result[0]:
-            logger.info(f"Created new session for user: {username} (expires in {retention_days} days)")
-            return result[0][0]
-
-        logger.error(f"Failed to create session for user: {username}")
-        return None
+        logger.info(f"Created new session for user: {username} with token {session_token} (expires in {retention_days} days)")
+        return session_token
 
     except Exception as e:
         logger.error(f"Error creating user session: {e}")
@@ -153,7 +149,7 @@ def cleanup_old_sessions():
     try:
         # Get retention period from config
         retention_days = config.getint('SERVER', 'user_sessions_keep_days', fallback=30)
-        
+
         result = db("""
             WITH deleted_sessions AS (
                 DELETE FROM user_sessions
@@ -163,9 +159,9 @@ def cleanup_old_sessions():
             )
             SELECT COUNT(*) FROM deleted_sessions
         """, [retention_days])
-        
+
         deleted_count = result[0][0] if result and result[0] else 0
-        
+
         if deleted_count > 0:
             # Log maintenance operation
             db("""
@@ -182,11 +178,11 @@ def cleanup_old_sessions():
                     )
                 )
             """, [deleted_count, deleted_count, retention_days])
-            
+
             logger.info(f"Cleaned up {deleted_count} expired or old user sessions (retention: {retention_days} days)")
         else:
             logger.debug(f"No sessions needed cleanup (retention: {retention_days} days)")
-            
+
     except Exception as e:
         logger.error(f"Error cleaning up sessions: {e}")
         logger.error(traceback.format_exc())
@@ -197,7 +193,7 @@ def update_user_activity(username):
         # Get retention period from config
         retention_days = config.getint('SERVER', 'user_sessions_keep_days', fallback=30)
         new_expires_at = datetime.now(timezone.utc) + timedelta(days=retention_days)
-        
+
         # First try to update existing session
         result = db("""
             UPDATE user_sessions
@@ -304,23 +300,30 @@ def login():
                         if username == user_data.get('username') and password == user_data.get('password'):
                             logger.info(f"Test user authentication successful: {username}")
                             role = user_data.get('role', 'user')
-                            # Create tokens and session
-                            access_token = create_access_token(
-                                identity=username,
-                                additional_claims={'role': role}
-                            )
-                            refresh_token = create_refresh_token(identity=username)
+                            # Create session first to include token in JWT
                             session_token = create_user_session(username)
-
+                            logger.debug(f"Got session token from create_user_session: {session_token}")
                             if not session_token:
                                 return jsonify({"error": "Failed to create session"}), 500
 
-                            return jsonify({
+                            # Create tokens with session info
+                            access_token = create_access_token(
+                                identity=username,
+                                additional_claims={
+                                    'role': role,
+                                    'session_token': session_token
+                                }
+                            )
+                            refresh_token = create_refresh_token(identity=username)
+
+                            response_data = {
                                 'access_token': access_token,
                                 'refresh_token': refresh_token,
                                 'session_token': session_token,
                                 'role': role
-                            }), 200
+                            }
+                            logger.debug(f"Login response data: {response_data}")
+                            return jsonify(response_data), 200
                     except json.JSONDecodeError:
                         logger.error(f"Invalid JSON in TEST_USERS config")
                         continue
@@ -337,16 +340,20 @@ def login():
                     if bcrypt.checkpw(password.encode('utf-8'), stored_password.encode('utf-8')):
                         logger.info(f"Local user authentication successful: {username}")
                         role = user_data.get('role', 'user')
-                        # Create tokens and session
-                        access_token = create_access_token(
-                            identity=username,
-                            additional_claims={'role': role}
-                        )
-                        refresh_token = create_refresh_token(identity=username)
+                        # Create session first to include token in JWT
                         session_token = create_user_session(username)
-
                         if not session_token:
                             return jsonify({"error": "Failed to create session"}), 500
+
+                        # Create tokens with session info
+                        access_token = create_access_token(
+                            identity=username,
+                            additional_claims={
+                                'role': role,
+                                'session_token': session_token
+                            }
+                        )
+                        refresh_token = create_refresh_token(identity=username)
 
                         return jsonify({
                             'access_token': access_token,
@@ -366,16 +373,20 @@ def login():
             # Get role from admin_users table for LDAP users
             role = get_user_role(username)
 
-            # Create tokens and session
-            access_token = create_access_token(
-                identity=username,
-                additional_claims={'role': role}
-            )
-            refresh_token = create_refresh_token(identity=username)
+            # Create session first to include token in JWT
             session_token = create_user_session(username)
-
             if not session_token:
                 return jsonify({"error": "Failed to create session"}), 500
+
+            # Create tokens with session info
+            access_token = create_access_token(
+                identity=username,
+                additional_claims={
+                    'role': role,
+                    'session_token': session_token
+                }
+            )
+            refresh_token = create_refresh_token(identity=username)
 
             return jsonify({
                 'access_token': access_token,
@@ -447,9 +458,12 @@ def get_user_sessions():
     """Get list of active sessions for the current user"""
     try:
         username = get_jwt_identity()
-        current_token = get_jwt()['jti']  # JWT ID of current token
-        
-        # Get active sessions for the user
+        jwt_claims = get_jwt()
+        current_session = jwt_claims.get('session_token')
+        role = jwt_claims.get('role', 'user')
+        logger.debug(f"User sessions request - username: {username}, role: {role}, session: {current_session}, claims: {jwt_claims}")
+
+        # Get all active sessions for current user
         rows = db("""
             SELECT 
                 username,
@@ -460,20 +474,22 @@ def get_user_sessions():
             WHERE username = %s
               AND expires_at > NOW()
             ORDER BY created_at DESC
-        """, [username])
-        
-        # Format response
+        """, [username]) or []
+
+        # Format sessions
         sessions = [{
             'username': row[0],
             'created_at': row[1].isoformat() if row[1] else None,
             'expires_at': row[2].isoformat() if row[2] else None,
-            'is_current': True if row[0] == username else False  # Current user's sessions
+            'is_current': current_session == row[3],
+            'role': role
         } for row in rows]
-        
+
         return jsonify({
             'sessions': sessions
         }), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting user sessions: {e}")
+        logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to get user sessions"}), 500

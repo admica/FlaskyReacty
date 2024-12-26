@@ -19,7 +19,7 @@ def generate_avatar_svg(seed: int, initial: str) -> str:
         nonlocal rng
         rng = (1103515245 * rng + 12345) & 0x7fffffff
         return rng
-    
+
     def get_color():
         """Generate vibrant colors using HSL color space"""
         h = get_next_random() % 360  # Hue: 0-359
@@ -31,20 +31,20 @@ def generate_avatar_svg(seed: int, initial: str) -> str:
     gradient_angle = get_next_random() % 360
     color1 = get_color()
     color2 = get_color()
-    
+
     # Generate pattern elements
     pattern = []
-    
+
     # Add some background shapes
     for i in range(4):  # Background shapes
         x = 10 + (get_next_random() % 80)
         y = 10 + (get_next_random() % 80)
         size = 30 + (get_next_random() % 40)
         opacity = 0.3 + (get_next_random() % 40) / 100
-        
+
         shape_type = get_next_random() % 4
         color = get_color()
-        
+
         if shape_type == 0:  # Circle
             pattern.append(f'<circle cx="{x}" cy="{y}" r="{size/2}" fill="{color}" opacity="{opacity}" />')
         elif shape_type == 1:  # Square
@@ -67,7 +67,7 @@ def generate_avatar_svg(seed: int, initial: str) -> str:
         y = 20 + (get_next_random() % 60)
         size = 15 + (get_next_random() % 30)
         color = get_color()
-        
+
         shape_type = get_next_random() % 3
         if shape_type == 0:  # Small circles
             pattern.append(f'<circle cx="{x}" cy="{y}" r="{size/3}" fill="{color}" />')
@@ -109,7 +109,7 @@ def generate_avatar_svg(seed: int, initial: str) -> str:
         filter="url(#shadow)"
     >{initial}</text>
 </svg>'''
-    
+
     return svg
 
 @preferences_bp.route('/api/v1/preferences', methods=['GET'])
@@ -120,7 +120,7 @@ def get_preferences():
     try:
         username = get_jwt_identity()
         logger.info(f"Getting preferences for user: {username}")
-        
+
         # Get user preferences from database
         result = db("""
             SELECT theme, avatar_seed, settings
@@ -158,7 +158,7 @@ def update_preferences():
     try:
         username = get_jwt_identity()
         logger.info(f"Updating preferences for user: {username}")
-        
+
         data = request.get_json()
         logger.debug(f"Received preference data: {data}")
 
@@ -206,10 +206,10 @@ def get_avatar(seed):
         # Get username from request args or default to 'U'
         username = request.args.get('username', 'U')
         initial = username[0].upper()
-        
+
         # Generate SVG avatar
         svg_content = generate_avatar_svg(seed, initial)
-        
+
         # Return SVG with proper content type
         return Response(svg_content, mimetype='image/svg+xml')
 

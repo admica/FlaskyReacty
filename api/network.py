@@ -33,7 +33,7 @@ def validate_location(location):
     """Validate location exists in database"""
     if not location:
         return None
-    
+
     result = db("SELECT site FROM locations WHERE site = %s", [location])
     return location if result and len(result) > 0 else None
 
@@ -136,7 +136,7 @@ def get_connections():
     Query Parameters:
     - hours: Number of hours to look back (positive integer)
     - location: Filter by specific location
-    
+
     The data is cached for 1 minute to improve performance.
     Results are ordered by packet count in descending order.
     """

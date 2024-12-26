@@ -448,7 +448,7 @@ def get_sensors():
 
         rows = db("SELECT name, status, pcap_avail, totalspace, usedspace, last_update, fqdn, version, location FROM sensors")
         logger.debug(f"Raw sensor rows from DB: {rows}")
-        
+
         response_data = []
         for sensor in rows:
             sensor_data = {
