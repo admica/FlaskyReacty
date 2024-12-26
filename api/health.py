@@ -104,9 +104,42 @@ def get_health_summary():
         # Execute query
         results = db(query, params) if params else db(query)
 
+        # Get location-specific stats
+        location_stats = db("""
+            SELECT 
+                location,
+                COUNT(*) FILTER (WHERE status = 'Online') as sensors_online,
+                COUNT(*) FILTER (WHERE status = 'Offline') as sensors_offline,
+                COUNT(*) FILTER (WHERE status = 'Degraded') as sensors_degraded,
+                SUM(CASE WHEN pcap_avail IS NOT NULL THEN pcap_avail ELSE 0 END)::integer as pcap_minutes,
+                ROUND(AVG(CASE 
+                    WHEN usedspace LIKE '%%\%%' 
+                    THEN CAST(TRIM(TRAILING '%%' FROM usedspace) AS INTEGER)
+                    ELSE 0 
+                END))::integer as disk_usage
+            FROM sensors
+            WHERE location IS NOT NULL
+            GROUP BY location
+        """)
+
         # Format results
         summaries = []
         for row in results:
+            # Get location stats for this summary
+            location_data = {}
+            for loc in location_stats:
+                location_data[loc[0]] = {
+                    'sensors_online': loc[1],
+                    'sensors_offline': loc[2],
+                    'sensors_degraded': loc[3],
+                    'pcap_minutes': loc[4],
+                    'disk_usage': loc[5]
+                }
+
+            # Create performance metrics with location stats
+            performance_metrics = row[13] if row[13] else {}
+            performance_metrics['location_stats'] = location_data
+
             summary = {
                 'timestamp': row[0].isoformat(),
                 'duration_seconds': row[1],
@@ -127,7 +160,7 @@ def get_health_summary():
                     'avg_disk_usage_pct': row[11]
                 },
                 'errors': row[12] if row[12] else [],
-                'performance_metrics': row[13] if row[13] else {}
+                'performance_metrics': performance_metrics
             }
             summaries.append(summary)
 

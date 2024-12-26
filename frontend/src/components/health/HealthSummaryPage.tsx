@@ -142,26 +142,37 @@ export function HealthSummaryPage() {
       <Stack spacing="md">
         <Group position="apart">
           <Title order={2}>Sensor Health Summary</Title>
-          <Group align="flex-end" spacing="md">
-            <Select
-              label="Auto-refresh"
-              value={refreshInterval}
-              onChange={val => setRefreshInterval(val || '60')}
-              data={[
-                { value: '30', label: '30 seconds' },
-                { value: '60', label: '1 minute' },
-                { value: '300', label: '5 minutes' }
-              ]}
-            />
-            <Box pt={25}>
-              <RingProgress
-                size={40}
-                thickness={4}
-                roundCaps
-                sections={[{ value: refreshProgress, color: 'blue' }]}
+          <Box>
+            <Text size="sm" mb={3}>Auto-refresh</Text>
+            <Group gap="xs" align="center" style={{ height: 36 }}>
+              <Select
+                value={refreshInterval}
+                onChange={val => setRefreshInterval(val || '60')}
+                data={[
+                  { value: '30', label: '30 seconds' },
+                  { value: '60', label: '1 minute' },
+                  { value: '300', label: '5 minutes' }
+                ]}
+                styles={{ input: { height: 36 } }}
               />
-            </Box>
-          </Group>
+              <Box 
+                style={{ 
+                  width: 24, 
+                  height: 24,
+                  display: 'flex',
+                  alignItems: 'center',
+                  opacity: 0.8
+                }}
+              >
+                <RingProgress
+                  size={24}
+                  thickness={3}
+                  roundCaps
+                  sections={[{ value: 100 - refreshProgress, color: 'blue' }]}
+                />
+              </Box>
+            </Group>
+          </Box>
         </Group>
 
         <Grid>
@@ -245,6 +256,84 @@ export function HealthSummaryPage() {
             </Card>
           </Grid.Col>
 
+          {/* Location Health Summary */}
+          <Grid.Col span={12}>
+            <Card withBorder>
+              <Stack>
+                <Title order={3}>Location Health Summary</Title>
+                <Table>
+                  <thead>
+                    <tr>
+                      <th>Location</th>
+                      <th>Sensors</th>
+                      <th>Devices</th>
+                      <th>Network Coverage</th>
+                      <th>Storage</th>
+                      <th>Health Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summaries[0]?.performance_metrics?.location_stats && Object.entries(summaries[0].performance_metrics.location_stats).map(([location, stats]: [string, any]) => {
+                      const healthScore = Math.round((
+                        (stats.sensors_online / (stats.sensors_online + stats.sensors_offline)) * 100 +
+                        (stats.devices_online / (stats.devices_online + stats.devices_offline)) * 100
+                      ) / 2);
+                      
+                      return (
+                        <tr key={location}>
+                          <td>{location}</td>
+                          <td>
+                            <Stack spacing={4}>
+                              <Group spacing="xs">
+                                <Badge color="green" size="sm">{stats.sensors_online || 0} online</Badge>
+                                <Badge color="red" size="sm">{stats.sensors_offline || 0} offline</Badge>
+                              </Group>
+                              <Text size="xs" c="dimmed">Total: {stats.sensors_online + stats.sensors_offline}</Text>
+                            </Stack>
+                          </td>
+                          <td>
+                            <Stack spacing={4}>
+                              <Group spacing="xs">
+                                <Badge color="green" size="sm">{stats.devices_online || 0} online</Badge>
+                                <Badge color="red" size="sm">{stats.devices_offline || 0} offline</Badge>
+                              </Group>
+                              <Text size="xs" c="dimmed">Total: {stats.devices_online + stats.devices_offline}</Text>
+                            </Stack>
+                          </td>
+                          <td>
+                            <Stack spacing={4}>
+                              <Text size="sm">Dst: {stats.dst_subnets || 0}</Text>
+                              <Text size="xs" c="dimmed">Unique: {stats.unique_subnets || 0}</Text>
+                            </Stack>
+                          </td>
+                          <td>
+                            <Stack spacing={4}>
+                              <Text size="sm">PCAP: {Math.round((stats.pcap_minutes || 0) / 60)}h</Text>
+                              <Text 
+                                size="sm" 
+                                c={stats.disk_usage > 80 ? 'red' : stats.disk_usage > 60 ? 'yellow' : 'green'}
+                              >
+                                Disk: {stats.disk_usage || 0}%
+                              </Text>
+                            </Stack>
+                          </td>
+                          <td>
+                            <Badge 
+                              color={healthScore > 80 ? 'green' : healthScore > 60 ? 'yellow' : 'red'}
+                              size="lg"
+                            >
+                              {healthScore}%
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </Table>
+              </Stack>
+            </Card>
+          </Grid.Col>
+
           {/* Performance Metrics */}
           <Grid.Col span={12}>
             <Card withBorder>
@@ -319,59 +408,6 @@ export function HealthSummaryPage() {
                     </Stack>
                   </Grid.Col>
                 </Grid>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
-          {/* Location Health Summary */}
-          <Grid.Col span={12}>
-            <Card withBorder>
-              <Stack>
-                <Title order={3}>Location Health Summary</Title>
-                <Table>
-                  <thead>
-                    <tr>
-                      <th>Location</th>
-                      <th>Sensors</th>
-                      <th>Devices</th>
-                      <th>PCAP Retention</th>
-                      <th>Storage</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(summaries[0]?.performance_metrics?.location_stats || {}).map(([location, stats]: [string, any]) => (
-                      <tr key={location}>
-                        <td>{location}</td>
-                        <td>
-                          <Group spacing="xs">
-                            <Badge color="green" size="sm">{stats.sensors_online || 0}</Badge>
-                            <Badge color="red" size="sm">{stats.sensors_offline || 0}</Badge>
-                          </Group>
-                        </td>
-                        <td>
-                          <Group spacing="xs">
-                            <Badge color="green" size="sm">{stats.devices_online || 0}</Badge>
-                            <Badge color="red" size="sm">{stats.devices_offline || 0}</Badge>
-                          </Group>
-                        </td>
-                        <td>{Math.round((stats.pcap_minutes || 0) / 60)}h</td>
-                        <td>
-                          <Text color={stats.disk_usage > 80 ? 'red' : stats.disk_usage > 60 ? 'yellow' : 'green'}>
-                            {stats.disk_usage || 0}%
-                          </Text>
-                        </td>
-                        <td>
-                          <Badge 
-                            color={stats.health_score > 80 ? 'green' : stats.health_score > 60 ? 'yellow' : 'red'}
-                          >
-                            {stats.health_score || 0}%
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
               </Stack>
             </Card>
           </Grid.Col>
