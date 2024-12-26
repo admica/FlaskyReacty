@@ -107,19 +107,23 @@ def get_health_summary():
         # Get location-specific stats
         location_stats = db("""
             SELECT 
-                location,
-                COUNT(*) FILTER (WHERE status = 'Online') as sensors_online,
-                COUNT(*) FILTER (WHERE status = 'Offline') as sensors_offline,
-                COUNT(*) FILTER (WHERE status = 'Degraded') as sensors_degraded,
-                SUM(CASE WHEN pcap_avail IS NOT NULL THEN pcap_avail ELSE 0 END)::integer as pcap_minutes,
+                s.location,
+                COUNT(*) FILTER (WHERE s.status = 'Online') as sensors_online,
+                COUNT(*) FILTER (WHERE s.status = 'Offline') as sensors_offline,
+                COUNT(*) FILTER (WHERE s.status = 'Degraded') as sensors_degraded,
+                COUNT(d.*) FILTER (WHERE d.status = 'Online') as devices_online,
+                COUNT(d.*) FILTER (WHERE d.status = 'Offline') as devices_offline,
+                COUNT(d.*) FILTER (WHERE d.status = 'Degraded') as devices_degraded,
+                SUM(CASE WHEN s.pcap_avail IS NOT NULL THEN s.pcap_avail ELSE 0 END)::integer as pcap_minutes,
                 ROUND(AVG(CASE 
-                    WHEN usedspace LIKE '%%\%%' 
-                    THEN CAST(TRIM(TRAILING '%%' FROM usedspace) AS INTEGER)
+                    WHEN s.usedspace LIKE '%%\%%' 
+                    THEN CAST(TRIM(TRAILING '%%' FROM s.usedspace) AS INTEGER)
                     ELSE 0 
                 END))::integer as disk_usage
-            FROM sensors
-            WHERE location IS NOT NULL
-            GROUP BY location
+            FROM sensors s
+            LEFT JOIN devices d ON d.sensor = s.name
+            WHERE s.location IS NOT NULL
+            GROUP BY s.location
         """)
 
         # Format results
@@ -132,8 +136,11 @@ def get_health_summary():
                     'sensors_online': loc[1],
                     'sensors_offline': loc[2],
                     'sensors_degraded': loc[3],
-                    'pcap_minutes': loc[4],
-                    'disk_usage': loc[5]
+                    'devices_online': loc[4],
+                    'devices_offline': loc[5],
+                    'devices_degraded': loc[6],
+                    'pcap_minutes': loc[7],
+                    'disk_usage': loc[8]
                 }
 
             # Create performance metrics with location stats

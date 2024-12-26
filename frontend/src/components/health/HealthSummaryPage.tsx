@@ -274,40 +274,48 @@ export function HealthSummaryPage() {
                   </thead>
                   <tbody>
                     {summaries[0]?.performance_metrics?.location_stats && Object.entries(summaries[0].performance_metrics.location_stats).map(([location, stats]: [string, any]) => {
-                      const healthScore = Math.round((
-                        (stats.sensors_online / (stats.sensors_online + stats.sensors_offline)) * 100 +
-                        (stats.devices_online / (stats.devices_online + stats.devices_offline)) * 100
-                      ) / 2);
+                      const totalSensors = (stats.sensors_online || 0) + (stats.sensors_offline || 0);
+                      const totalDevices = (stats.devices_online || 0) + (stats.devices_offline || 0);
+                      
+                      let healthScore = 0;
+                      if (totalSensors > 0 || totalDevices > 0) {
+                        const sensorScore = totalSensors > 0 ? ((stats.sensors_online || 0) / totalSensors) * 100 : 0;
+                        const deviceScore = totalDevices > 0 ? ((stats.devices_online || 0) / totalDevices) * 100 : 0;
+                        const diskScore = 100 - (stats.disk_usage || 0); // Higher score for lower disk usage
+                        
+                        // Weight the scores: sensors (40%), devices (40%), disk usage (20%)
+                        healthScore = Math.round(
+                          (sensorScore * 0.4) + 
+                          (deviceScore * 0.4) + 
+                          (diskScore * 0.2)
+                        );
+                      }
                       
                       return (
                         <tr key={location}>
                           <td>{location}</td>
                           <td>
-                            <Stack spacing={4}>
-                              <Group spacing="xs">
-                                <Badge color="green" size="sm">{stats.sensors_online || 0} online</Badge>
-                                <Badge color="red" size="sm">{stats.sensors_offline || 0} offline</Badge>
-                              </Group>
+                            <Group spacing={4}>
+                              <Badge color="green" size="sm">{stats.sensors_online || 0} online</Badge>
+                              <Badge color="red" size="sm">{stats.sensors_offline || 0} offline</Badge>
                               <Text size="xs" c="dimmed">Total: {stats.sensors_online + stats.sensors_offline}</Text>
-                            </Stack>
+                            </Group>
                           </td>
                           <td>
-                            <Stack spacing={4}>
-                              <Group spacing="xs">
-                                <Badge color="green" size="sm">{stats.devices_online || 0} online</Badge>
-                                <Badge color="red" size="sm">{stats.devices_offline || 0} offline</Badge>
-                              </Group>
+                            <Group spacing={4}>
+                              <Badge color="green" size="sm">{stats.devices_online || 0} online</Badge>
+                              <Badge color="red" size="sm">{stats.devices_offline || 0} offline</Badge>
                               <Text size="xs" c="dimmed">Total: {stats.devices_online + stats.devices_offline}</Text>
-                            </Stack>
+                            </Group>
                           </td>
                           <td>
-                            <Stack spacing={4}>
+                            <Group spacing={4}>
                               <Text size="sm">Dst: {stats.dst_subnets || 0}</Text>
-                              <Text size="xs" c="dimmed">Unique: {stats.unique_subnets || 0}</Text>
-                            </Stack>
+                              <Text size="xs" c="dimmed">(Unique: {stats.unique_subnets || 0})</Text>
+                            </Group>
                           </td>
                           <td>
-                            <Stack spacing={4}>
+                            <Group spacing={4}>
                               <Text size="sm">PCAP: {Math.round((stats.pcap_minutes || 0) / 60)}h</Text>
                               <Text 
                                 size="sm" 
@@ -315,12 +323,12 @@ export function HealthSummaryPage() {
                               >
                                 Disk: {stats.disk_usage || 0}%
                               </Text>
-                            </Stack>
+                            </Group>
                           </td>
                           <td>
                             <Badge 
                               color={healthScore > 80 ? 'green' : healthScore > 60 ? 'yellow' : 'red'}
-                              size="lg"
+                              size="md"
                             >
                               {healthScore}%
                             </Badge>
