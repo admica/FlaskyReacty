@@ -548,7 +548,7 @@ class SensorMonitor:
                 # Using grep to find run_job.py in the full command
                 cmd = 'ps -wweo pid,cmd | grep "run_job.py" | grep -v grep | wc -l; df -hP /pcap | tail -n1 | awk \'{print $4,$5}\''
                 logger.debug(f"Running status check command on {sensor_fqdn}: {cmd}")
-                
+
                 # Also get the actual process details for logging
                 detail_cmd = 'ps -wweo pid,cmd | grep "run_job.py" | grep -v grep || true'
                 _, stdout, stderr = ssh.exec_command(cmd, timeout=5)
@@ -572,7 +572,7 @@ class SensorMonitor:
                 if output:
                     lines = output.splitlines()
                     logger.debug(f"Command output lines from {sensor_fqdn}: {lines}")
-                    
+
                     if len(lines) < 2:
                         logger.error(f"Unexpected command output format from {sensor_fqdn}: {output}")
                         return 'Degraded'

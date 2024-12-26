@@ -15,6 +15,7 @@ import hmac
 import hashlib
 from uuid import uuid4
 from functools import wraps
+import traceback
 
 from core import logger, db, rate_limit, config
 from cache_utils import redis_client
@@ -147,15 +148,44 @@ def create_user_session(username):
         return None
 
 def cleanup_old_sessions():
-    """Clean up expired sessions"""
+    """Clean up expired sessions and sessions older than 30 days"""
     try:
-        db("""
-            DELETE FROM user_sessions
-            WHERE expires_at < NOW()
+        result = db("""
+            WITH deleted_sessions AS (
+                DELETE FROM user_sessions
+                WHERE expires_at < NOW() 
+                   OR created_at < NOW() - INTERVAL '30 days'
+                RETURNING id
+            )
+            SELECT COUNT(*) FROM deleted_sessions
         """)
-        logger.debug("Cleaned up expired user sessions")
+        
+        deleted_count = result[0][0] if result and result[0] else 0
+        
+        if deleted_count > 0:
+            # Log maintenance operation
+            db("""
+                INSERT INTO maintenance_operations 
+                (timestamp, operation_type, items_processed, items_removed, details)
+                VALUES (
+                    NOW(),
+                    'session_cleanup',
+                    %s,
+                    %s,
+                    jsonb_build_object(
+                        'reason', 'Automated cleanup of expired and old sessions',
+                        'retention_days', 30
+                    )
+                )
+            """, [deleted_count, deleted_count])
+            
+            logger.info(f"Cleaned up {deleted_count} expired or old user sessions")
+        else:
+            logger.debug("No sessions needed cleanup")
+            
     except Exception as e:
         logger.error(f"Error cleaning up sessions: {e}")
+        logger.error(traceback.format_exc())
 
 def update_user_activity(username):
     """Update user's session expiry"""

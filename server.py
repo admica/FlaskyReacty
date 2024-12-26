@@ -52,7 +52,7 @@ def cleanup_handler(signo=None, frame=None):
     """Handle cleanup for both normal exit and signals"""
     try:
         logger.info(f"Starting cleanup... (Signal: {signo if signo else 'None'})")
-        
+
         # Set shutdown flag
         if hasattr(server_status, 'shutdown_requested'):
             server_status['shutdown_requested'] = True

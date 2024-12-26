@@ -5,7 +5,7 @@ Discovers and runs test suites from the tests directory.
 
 Usage:
     ./run_tests.py [base_url] [test_files...] [--max=N]
-    
+
 Examples:
     ./run_tests.py                         # Run all tests with default URL
     ./run_tests.py https://localhost:3000  # Run all tests with specific URL
@@ -27,12 +27,12 @@ console = Console()
 
 class TestRunner:
     """Main test runner that discovers and executes test suites"""
-    
+
     def __init__(self, base_url: str = "https://localhost:3000", max_output_length: int = 150):
         self.base_url = base_url
         self.max_output_length = max_output_length
         self.results = []
-    
+
     def discover_tests(self, specific_files: Optional[List[str]] = None) -> List[Type]:
         """
         Discover test classes in the tests directory.
@@ -40,15 +40,15 @@ class TestRunner:
         """
         test_classes = []
         tests_dir = os.path.join(os.path.dirname(__file__), 'tests')
-        
+
         # Ensure tests directory exists
         if not os.path.exists(tests_dir):
             console.print("[red]Error: tests directory not found![/red]")
             sys.exit(1)
-        
+
         # Add tests directory to Python path
         sys.path.insert(0, os.path.dirname(__file__))
-        
+
         if specific_files:
             # Load only specified test files
             for file_name in specific_files:
@@ -83,30 +83,30 @@ class TestRunner:
                                     test_classes.append(test_class)
                     except Exception as e:
                         console.print(f"[red]Error loading module {name}: {str(e)}[/red]")
-        
+
         return test_classes
-    
+
     def run(self, specific_files: Optional[List[str]] = None) -> None:
         """Run discovered tests"""
         test_classes = self.discover_tests(specific_files)
-        
+
         if not test_classes:
             console.print("[yellow]No test classes found![/yellow]")
             return
-        
+
         console.print(f"\n[bold]Found {len(test_classes)} test classes[/bold]")
-        
+
         for test_class in test_classes:
             console.print(f"\n[bold blue]Running {test_class.__name__}[/bold blue]")
-            
+
             try:
                 # Initialize test class with base URL
                 test_instance = test_class(self.base_url)
-                
+
                 # Run setup if it exists
                 if hasattr(test_instance, 'setup'):
                     test_instance.setup()
-                
+
                 # Run all test methods
                 for method_name in sorted(dir(test_instance)):
                     if method_name.startswith('test_'):
@@ -122,18 +122,18 @@ class TestRunner:
                                 None,
                                 str(e)
                             ))
-                
+
                 # Run teardown if it exists
                 if hasattr(test_instance, 'teardown'):
                     test_instance.teardown()
-                
+
                 # Store results
                 if hasattr(test_instance, 'results'):
                     self.results.extend(test_instance.results)
-            
+
             except Exception as e:
                 console.print(f"[red]Error running {test_class.__name__}: {str(e)}[/red]")
-    
+
     def truncate_text(self, text: str) -> str:
         """Truncate text to max_output_length, adding ellipsis if needed"""
         if not text or len(text) <= self.max_output_length:
@@ -145,20 +145,20 @@ class TestRunner:
         if not self.results:
             console.print("\n[yellow]No test results to display[/yellow]")
             return
-        
+
         console.print("\n[bold]Test Execution Summary:[/bold]")
-        
+
         table = Table(show_header=True, header_style="bold")
         table.add_column("Test Name")
         table.add_column("Result")
         table.add_column("Details", overflow="fold")
-        
+
         success_count = 0
         for result in self.results:
             status = "[green]Success[/green]" if result.success else "[red]Failed[/red]"
             if result.success:
                 success_count += 1
-            
+
             details = ""
             if result.error:
                 details = f"[red]{self.truncate_text(str(result.error))}[/red]"
@@ -167,13 +167,13 @@ class TestRunner:
                     details = self.truncate_text(str(result.response))
                 except:
                     details = "Unable to format response"
-            
+
             table.add_row(
                 result.name,
                 status,
                 details
             )
-        
+
         console.print(table)
         total = len(self.results)
         success_rate = (success_count / total * 100) if total > 0 else 0
@@ -185,7 +185,7 @@ def main():
     base_url = "https://localhost:3000"
     test_files = []
     max_output_length = 150 # Default number of lines
-    
+
     # Parse arguments
     i = 0
     while i < len(args):
@@ -200,12 +200,12 @@ def main():
         elif arg.endswith('.py') or arg.startswith('test_'):
             test_files.append(arg)
         i += 1
-    
+
     try:
         runner = TestRunner(base_url, max_output_length)
         runner.run(test_files if test_files else None)
         runner.print_summary()
-    
+
     except KeyboardInterrupt:
         console.print("\n[yellow]Tests interrupted by user[/yellow]")
         sys.exit(1)

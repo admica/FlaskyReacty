@@ -25,13 +25,18 @@ const BgGlobe = () => {
   const globeEl = useRef<any>();
   const [arcs, setArcs] = useState<Connection[]>([]);
 
+  // Get current month's globe image
+  const currentMonth = new Date().getMonth() + 1; // getMonth() returns 0-11
+  const globeImage = `/globe${currentMonth}.png`;
+
   // NASA locations
   const locations: NASALocation[] = [
-    { id: 'HQ', name: 'NASA Headquarters', lat: 38.9072, lng: -77.0365 },
-    { id: 'JSC', name: 'Johnson Space Center', lat: 29.7604, lng: -95.3698 },
-    { id: 'KSC', name: 'Kennedy Space Center', lat: 28.4059, lng: -80.6081 },
-    { id: 'MSFC', name: 'Marshall Space Flight Center', lat: 34.7291, lng: -86.5861 },
-    { id: 'GSFC', name: 'Goddard Space Flight Center', lat: 38.9967, lng: -76.8484 },
+    { id: 'HQ', name: 'HQ', lat: 38.9072, lng: -77.0365 },
+    { id: 'JSC', name: 'JSC', lat: 29.7604, lng: -95.3698 },
+    { id: 'KSC', name: 'KSC', lat: 28.4059, lng: -80.6081 },
+    { id: 'MSFC', name: 'MSFC', lat: 34.7291, lng: -86.5861 },
+    { id: 'GSFC', name: 'GSFC', lat: 38.9967, lng: -76.8484 },
+    { id: 'ARC', name: 'ARC', lat: 37.4130, lng: -122.0644 },
   ];
 
   useEffect(() => {
@@ -53,19 +58,26 @@ const BgGlobe = () => {
       }
     }
 
-    // Add some international connections from JSC
+    // Add international connections from JSC and ARC
     const jsc = locations.find(loc => loc.id === 'JSC')!;
+    const arc = locations.find(loc => loc.id === 'ARC')!;
+
     const internationalConnections = [
-      { name: 'London', lat: 51.5074, lng: -0.1278 },
-      { name: 'Tokyo', lat: 35.6762, lng: 139.6503 },
-      { name: 'Moscow', lat: 55.7558, lng: 37.6173 },
+      // JSC connections
+      { name: 'London', lat: 51.5074, lng: -0.1278, source: jsc },
+      { name: 'Tokyo', lat: 35.6762, lng: 139.6503, source: jsc },
+      { name: 'Moscow', lat: 55.7558, lng: 37.6173, source: jsc },
+      // ARC connections
+      { name: 'Sydney', lat: -33.8688, lng: 151.2093, source: arc },
+      { name: 'Perth', lat: -31.9505, lng: 115.8605, source: arc },
+      { name: 'Canberra', lat: -35.2809, lng: 149.1300, source: arc },
     ].map(target => ({
-      startLat: jsc.lat,
-      startLng: jsc.lng,
+      startLat: target.source.lat,
+      startLng: target.source.lng,
       endLat: target.lat,
       endLng: target.lng,
       bandwidth: 500,
-      source: 'JSC',
+      source: target.source.id,
       target: target.name,
       isInternational: true,
     }));
@@ -75,8 +87,8 @@ const BgGlobe = () => {
     // Set initial camera position
     if (globeEl.current) {
       globeEl.current.controls().autoRotate = true;
-      globeEl.current.controls().autoRotateSpeed = 0.5;
-      globeEl.current.pointOfView({ lat: 39.6, lng: -98.5, altitude: 2.5 });
+      globeEl.current.controls().autoRotateSpeed = 0.22;
+      globeEl.current.pointOfView({ lat: 20, lng: -77, altitude: 2 });
     }
   }, []);
 
@@ -84,21 +96,21 @@ const BgGlobe = () => {
     <div style={{ position: 'fixed', left: 0, right: 0, top: 0, bottom: 0 }}>
       <Globe
         ref={globeEl}
-        globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
+        globeImageUrl={globeImage}
         backgroundColor="rgba(0,0,0,0)"
         atmosphereColor="#4facfe"
-        atmosphereAltitude={0.25}
+        atmosphereAltitude={0.2}
         arcsData={arcs}
-        arcColor={(d: any) => d.isInternational ? '#ff4b4b' : '#4facfe'}
-        arcAltitude={0.3}
-        arcStroke={0.5}
-        arcDashLength={0.5}
-        arcDashGap={0.5}
-        arcDashAnimateTime={2000}
+        arcColor={(d: any) => d.isInternational ? '#853434' : '#3778b1'}
+        arcAltitude={0.15}
+        arcStroke={0.44}
+        arcDashLength={0.6}
+        arcDashGap={0.65}
+        arcDashAnimateTime={2200}
         pointsData={locations}
         pointColor={() => '#4facfe'}
         pointAltitude={0}
-        pointRadius={0.05}
+        pointRadius={0.25}
         pointsMerge={true}
         width={window.innerWidth}
         height={window.innerHeight}

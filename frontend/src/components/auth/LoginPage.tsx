@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect, Suspense, lazy } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     TextInput,
@@ -12,8 +12,10 @@ import {
     rem,
 } from '@mantine/core';
 import { IconAlertCircle } from '@tabler/icons-react';
-import BgGlobe from './bg';
 import apiService from '../../services/api';
+
+// Lazy load the globe component
+const BgGlobe = lazy(() => import('./bg'));
 
 export function LoginPage() {
     const [username, setUsername] = useState('');
@@ -29,9 +31,6 @@ export function LoginPage() {
             setUsername(remembered);
         }
     }, []);
-
-    // Memoize the BgGlobe component
-    const memoizedGlobe = useMemo(() => <BgGlobe />, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -61,7 +60,9 @@ export function LoginPage() {
             margin: 0,
             padding: 0
         }}>
-            {memoizedGlobe}
+            <Suspense fallback={null}>
+                <BgGlobe />
+            </Suspense>
 
             <Container
                 size={420}
