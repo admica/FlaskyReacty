@@ -1,7 +1,7 @@
 // PATH: src/components/sensors/SensorsPage.tsx
 
 import { useState, useEffect } from 'react';
-import { Box, Table, Title, Text, Badge, Group, Stack, Card, MultiSelect, Loader, Modal, Select, RingProgress, Tooltip, Paper, ScrollArea } from '@mantine/core';
+import { Box, Table, Title, Text, Badge, Group, Stack, Card, MultiSelect, Loader, Modal, Select, RingProgress, Tooltip, Paper, ScrollArea, ActionIcon } from '@mantine/core';
 import { IconChevronUp, IconChevronDown, IconSelector } from '@tabler/icons-react';
 import { formatDistanceToNow, intervalToDuration } from 'date-fns';
 import apiService from '../../services/api';
@@ -49,6 +49,7 @@ export function SensorsPage() {
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState<string>('30');
   const [refreshProgress, setRefreshProgress] = useState(100);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Get unique statuses and locations for filters
   const uniqueStatuses = [...new Set(sensors.map(s => s.status))];
@@ -576,34 +577,70 @@ export function SensorsPage() {
         )}
       </Modal>
 
-      {/* Debug Messages */}
-      <Paper 
-        withBorder 
-        p="xs" 
-        style={{ 
-          position: 'fixed', 
-          bottom: '1rem', 
-          right: '1rem', 
-          width: '300px',
-          maxHeight: '200px',
-          overflowY: 'auto',
-          zIndex: 1000,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)'
+      {/* Debug Messages Overlay */}
+      {showDebug && (
+        <Paper
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            zIndex: 1000,
+            width: '400px',
+            maxHeight: '300px',
+            background: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <Stack gap="xs" p="xs">
+            <Group justify="space-between">
+              <Text size="xs" fw={500} c="dimmed">Debug Log ({debugMessages.length} messages)</Text>
+              <Group gap="xs">
+                <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
+                <ActionIcon 
+                  size="xs" 
+                  variant="subtle" 
+                  color="gray" 
+                  onClick={() => setShowDebug(false)}
+                >
+                  ×
+                </ActionIcon>
+              </Group>
+            </Group>
+            <ScrollArea h={250} scrollbarSize={8}>
+              <Stack gap={4}>
+                {debugMessages.map(msg => (
+                  <Text 
+                    key={msg.id} 
+                    size="xs"
+                    style={{ 
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.2,
+                      userSelect: 'text'
+                    }}
+                  >
+                    <Text span c="dimmed" size="xs" style={{ userSelect: 'text' }}>[{msg.timestamp}]</Text>{' '}
+                    {msg.message}
+                  </Text>
+                ))}
+              </Stack>
+            </ScrollArea>
+          </Stack>
+        </Paper>
+      )}
+
+      {/* Debug Trigger Area */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          right: 0,
+          width: '100px',
+          height: '100px',
+          zIndex: 999
         }}
-      >
-        <ScrollArea>
-          {debugMessages.map((msg) => (
-            <Text
-              key={msg.timestamp}
-              size="xs"
-              c="dimmed"
-              style={{ whiteSpace: 'pre-wrap' }}
-            >
-              [{msg.timestamp}] {msg.message}
-            </Text>
-          ))}
-        </ScrollArea>
-      </Paper>
+        onMouseEnter={() => setShowDebug(true)}
+      />
     </Box>
   );
 } 

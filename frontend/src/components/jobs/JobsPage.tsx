@@ -1,6 +1,6 @@
 // PATH: src/components/jobs/JobsPage.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -44,6 +44,13 @@ const STATUS_OPTIONS = [
   { value: 'Merging', label: 'Merging' },
 ];
 
+// Add debug message state and interface
+interface DebugMessage {
+  id: number;
+  message: string;
+  timestamp: string;
+}
+
 export function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,19 +63,37 @@ export function JobsPage() {
     location: '',
     search: '',
   });
+  const [showDebug, setShowDebug] = useState(false);
+  const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
+  const messageIdCounter = useRef(0);
 
   const isAdmin = localStorage.getItem('isAdmin') === 'true';
   const modals = useModals();
+
+  const addDebugMessage = (message: string) => {
+    setDebugMessages(prev => {
+      const updatedMessages = [...prev.slice(-99), {
+        id: messageIdCounter.current++,
+        timestamp: new Date().toISOString(),
+        message
+      }];
+      return updatedMessages;
+    });
+  };
 
   const loadJobs = async () => {
     try {
       setLoading(true);
       setError(null);
+      addDebugMessage('Fetching jobs data...');
       const response = await apiService.getJobs();
       setJobs(response);
+      addDebugMessage(`Successfully fetched ${response.length} jobs`);
     } catch (err: any) {
       console.error('Error loading jobs:', err);
-      setError(err.message || 'Failed to load jobs');
+      const errorMessage = err.message || 'Failed to load jobs';
+      setError(errorMessage);
+      addDebugMessage(`Error loading jobs: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -506,6 +531,71 @@ export function JobsPage() {
           )}
         </Modal>
       </Stack>
+
+      {/* Debug Messages Overlay */}
+      {showDebug && (
+        <Paper
+          style={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            zIndex: 1000,
+            width: '400px',
+            maxHeight: '300px',
+            background: 'rgba(0, 0, 0, 0.8)',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <Stack gap="xs" p="xs">
+            <Group justify="space-between">
+              <Text size="xs" fw={500} c="dimmed">Debug Log ({debugMessages.length} messages)</Text>
+              <Group gap="xs">
+                <Text size="xs" c="dimmed">{new Date().toLocaleTimeString()}</Text>
+                <ActionIcon 
+                  size="xs" 
+                  variant="subtle" 
+                  color="gray" 
+                  onClick={() => setShowDebug(false)}
+                >
+                  ×
+                </ActionIcon>
+              </Group>
+            </Group>
+            <ScrollArea h={250} scrollbarSize={8}>
+              <Stack gap={4}>
+                {debugMessages.map(msg => (
+                  <Text 
+                    key={msg.id} 
+                    size="xs"
+                    style={{ 
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      lineHeight: 1.2,
+                      userSelect: 'text'
+                    }}
+                  >
+                    <Text span c="dimmed" size="xs" style={{ userSelect: 'text' }}>[{msg.timestamp}]</Text>{' '}
+                    {msg.message}
+                  </Text>
+                ))}
+              </Stack>
+            </ScrollArea>
+          </Stack>
+        </Paper>
+      )}
+
+      {/* Debug Trigger Area */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          right: 0,
+          width: '100px',
+          height: '100px',
+          zIndex: 999
+        }}
+        onMouseEnter={() => setShowDebug(true)}
+      />
     </Box>
   );
 } 
