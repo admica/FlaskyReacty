@@ -455,7 +455,7 @@ def refresh():
 @jwt_required()
 @rate_limit()
 def get_user_sessions():
-    """Get list of active sessions for the current user"""
+    """Get list of active sessions for the current user or all users if admin"""
     try:
         username = get_jwt_identity()
         jwt_claims = get_jwt()
@@ -463,18 +463,26 @@ def get_user_sessions():
         role = jwt_claims.get('role', 'user')
         logger.debug(f"User sessions request - username: {username}, role: {role}, session: {current_session}, claims: {jwt_claims}")
 
-        # Get all active sessions for current user
-        rows = db("""
+        # Get all sessions from the last 7 days
+        # If admin, get all users' sessions, otherwise just the current user's
+        query = """
             SELECT 
                 username,
                 created_at,
                 expires_at,
                 session_token
             FROM user_sessions
-            WHERE username = %s
-              AND expires_at > NOW()
+            WHERE created_at > NOW() - INTERVAL '7 days'
+            {}
             ORDER BY created_at DESC
-        """, [username]) or []
+        """
+        
+        if role != 'admin':
+            query = query.format("AND username = %s")
+            rows = db(query, [username]) or []
+        else:
+            query = query.format("")
+            rows = db(query) or []
 
         # Format sessions
         sessions = [{
@@ -482,7 +490,7 @@ def get_user_sessions():
             'created_at': row[1].isoformat() if row[1] else None,
             'expires_at': row[2].isoformat() if row[2] else None,
             'is_current': current_session == row[3],
-            'role': role
+            'role': get_user_role(row[0])  # Get the correct role for each user
         } for row in rows]
 
         return jsonify({
