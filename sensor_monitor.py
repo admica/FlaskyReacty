@@ -500,9 +500,10 @@ class SensorMonitor:
 
     def check_sensor_status(self, sensor_fqdn: str) -> str:
         """Check basic sensor connectivity and determine status"""
-        logger.debug(f"Checking status for sensor {sensor_fqdn}")
+        logger.debug(f"Starting status check for sensor {sensor_fqdn}")
         try:
             # Try to ping the sensor first
+            logger.debug(f"Pinging {sensor_fqdn}")
             result = subprocess.run(
                 ["ping", "-c", "1", "-W", "2", sensor_fqdn],
                 capture_output=True,
@@ -510,9 +511,10 @@ class SensorMonitor:
             )
 
             if result.returncode != 0:
-                logger.debug(f"Ping failed for {sensor_fqdn}")
+                logger.debug(f"Ping failed for {sensor_fqdn}: {result.stderr}")
                 return 'Offline'
 
+            logger.debug(f"Ping successful for {sensor_fqdn}, attempting SSH connection")
             # If ping succeeds, try SSH checks
             ssh = None
             try:
@@ -523,57 +525,94 @@ class SensorMonitor:
                 connected = False
                 for pubkey in self.ssh_keys:
                     try:
-                        logger.debug(f'SSH {sensor_fqdn} using pubkey: {pubkey}')
+                        logger.debug(f'Trying SSH key {pubkey} for {sensor_fqdn}')
                         ssh.connect(
                             sensor_fqdn,
                             username=self.config.get("SSH", "username", fallback="pcapuser"),
                             key_filename=pubkey,
                             timeout=self.config.getint("SSH", "timeout", fallback=10)
                         )
-                        logger.info(f'SSH {sensor_fqdn} established with pubkey: {pubkey}')
+                        logger.debug(f'Successfully connected to {sensor_fqdn} with key {pubkey}')
                         connected = True
                         break
                     except Exception as e:
-                        logger.debug(f'SSH {sensor_fqdn} failed with pubkey: {pubkey} - {str(e)}')
+                        logger.debug(f'SSH connection failed with key {pubkey}: {str(e)}')
                         continue
 
                 if not connected:
+                    logger.debug(f"Failed to connect to {sensor_fqdn} with any SSH key")
                     return 'Offline'
 
                 # Check if run_job.py is running and get disk space in one command
-                cmd = "ps aux | grep -c '[r]un_job.py'; df -h /pcap | tail -n1 | awk '{print $4,$5}'"
-                _, stdout, _ = ssh.exec_command(cmd, timeout=5)
+                # Using ps -wweo to get full command lines without truncation
+                # Using grep to find run_job.py in the full command
+                cmd = 'ps -wweo pid,cmd | grep "run_job.py" | grep -v grep | wc -l; df -hP /pcap | tail -n1 | awk \'{print $4,$5}\''
+                logger.debug(f"Running status check command on {sensor_fqdn}: {cmd}")
+                
+                # Also get the actual process details for logging
+                detail_cmd = 'ps -wweo pid,cmd | grep "run_job.py" | grep -v grep || true'
+                _, stdout, stderr = ssh.exec_command(cmd, timeout=5)
                 output = stdout.read().decode().strip()
+                error = stderr.read().decode().strip()
+
+                # Get process details if any exist
+                _, detail_stdout, _ = ssh.exec_command(detail_cmd, timeout=5)
+                process_details = detail_stdout.read().decode().strip()
+                if process_details:
+                    logger.debug(f"Found run_job.py processes on {sensor_fqdn}:\n{process_details}")
+
+                logger.debug(f"Raw command output from {sensor_fqdn}: [{output}]")
+                if error:
+                    logger.debug(f"Command stderr from {sensor_fqdn}: [{error}]")
+
+                if error:
+                    logger.error(f"Error running status check command on {sensor_fqdn}: {error}")
+                    return 'Degraded'
 
                 if output:
                     lines = output.splitlines()
-                    # Last line is always disk space
-                    disk_space = lines[-1] if lines else ""
-                    # First line is the count of run_job.py processes
-                    job_count = int(lines[0]) if lines else 0
-                    logger.debug(f"Found {job_count} run_job.py processes on {sensor_fqdn}")
+                    logger.debug(f"Command output lines from {sensor_fqdn}: {lines}")
+                    
+                    if len(lines) < 2:
+                        logger.error(f"Unexpected command output format from {sensor_fqdn}: {output}")
+                        return 'Degraded'
 
+                    # First line is the count of run_job.py processes
                     try:
+                        job_count = int(lines[0])
+                        logger.debug(f"Found {job_count} run_job.py processes on {sensor_fqdn}")
+                    except (ValueError, IndexError) as e:
+                        logger.error(f"Error parsing job count from {sensor_fqdn} '{lines[0]}': {e}")
+                        return 'Degraded'
+
+                    # Last line is disk space
+                    try:
+                        disk_space = lines[-1]
+                        logger.debug(f"Parsing disk space line from {sensor_fqdn}: [{disk_space}]")
                         avail, used_pct = disk_space.split()
                         used_pct = int(used_pct.rstrip('%'))
+                        logger.debug(f"Disk space on {sensor_fqdn}: available={avail}, used={used_pct}%")
 
                         if job_count > 0:
-                            logger.debug(f"Sensor {sensor_fqdn} is Busy with {job_count} run_job.py processes")
+                            logger.debug(f"Setting {sensor_fqdn} status to Busy ({job_count} run_job.py processes)")
                             return 'Busy'
                         elif used_pct >= 98:
-                            logger.debug(f"High disk usage on {sensor_fqdn}: {used_pct}%")
+                            logger.debug(f"Setting {sensor_fqdn} status to Degraded (disk usage {used_pct}%)")
                             return 'Degraded'
                         else:
+                            logger.debug(f"Setting {sensor_fqdn} status to Online (no jobs, disk usage {used_pct}%)")
                             return 'Online'
 
                     except (ValueError, IndexError) as e:
-                        logger.error(f"Error parsing disk space output '{disk_space}': {e}")
+                        logger.error(f"Error parsing disk space output from {sensor_fqdn} '{disk_space}': {e}")
                         return 'Degraded'
                 else:
-                    return 'Online'  # No output means no run_job.py running, disk space command failed
+                    logger.error(f"No output from status check command on {sensor_fqdn}")
+                    return 'Degraded'
 
             except Exception as e:
-                logger.error(f"SSH connection failed for {sensor_fqdn}: {e}")
+                logger.error(f"SSH operation failed for {sensor_fqdn}: {e}")
+                logger.debug(f"SSH error details for {sensor_fqdn}: {traceback.format_exc()}")
                 return 'Degraded'
             finally:
                 if ssh:
@@ -581,7 +620,8 @@ class SensorMonitor:
                     logger.debug(f"Closed SSH connection to {sensor_fqdn}")
 
         except Exception as e:
-            logger.error(f"Error checking sensor status: {e}")
+            logger.error(f"Status check failed for {sensor_fqdn}: {e}")
+            logger.debug(f"Status check error details for {sensor_fqdn}: {traceback.format_exc()}")
             return 'Offline'
 
     def check_all_sensors_status(self):
@@ -597,11 +637,6 @@ class SensorMonitor:
 
             for sensor_name, sensor_fqdn, current_status in sensors:
                 try:
-                    # Skip status check if sensor is Busy
-                    if current_status == 'Busy':
-                        logger.debug(f"Skipping status check for busy sensor {sensor_name}")
-                        continue
-
                     new_status = self.check_sensor_status(sensor_fqdn)
 
                     # Always update last_seen if we can reach the sensor
@@ -659,7 +694,9 @@ class SensorMonitor:
                 elif status == 'Offline':
                     summary.failed_sensors += 1
                 elif status == 'Degraded':
-                    summary.degraded_devices += 1
+                    summary.degraded_sensors += 1
+                elif status == 'Busy':
+                    summary.successful_sensors += 1
 
             # Get device counts - this is the only place we count devices
             cur.execute("""
@@ -673,8 +710,10 @@ class SensorMonitor:
                 summary.total_devices += count
                 if status == 'Online':
                     summary.online_devices += count
-                else:
+                elif status == 'Offline':
                     summary.offline_devices += count
+                elif status == 'Degraded':
+                    summary.degraded_devices += count
 
             # Only process active sensors for updates
             active_sensors = [s for s in sensors if s[2] in ('Online', 'Busy', 'Degraded')]
