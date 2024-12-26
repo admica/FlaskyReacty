@@ -459,6 +459,13 @@ const apiService = {
     const response = await api.get(url);
     return response.data;
   },
+
+  async getActiveUsers() {
+    debug('Fetching active users');
+    const response = await api.get('/admin/active-users');
+    debug(`Fetched ${response.data.active_users.length} active users`);
+    return response.data;
+  },
 };
 
 export default apiService; 

@@ -382,49 +382,49 @@ export function SensorsPage() {
       </Card>
       
       {/* Sensors Table */}
-      <Card withBorder>
-        <Table striped highlightOnHover>
+      <Card withBorder p="xs">
+        <Table striped highlightOnHover verticalSpacing="2" horizontalSpacing="xs">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th onClick={() => handleSort('location')} style={{ cursor: 'pointer' }}>
-                <Group justify="space-between">
-                  Location
+              <Table.Th onClick={() => handleSort('location')} style={{ cursor: 'pointer', padding: '8px' }}>
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">Location</Text>
                   {getSortIcon('location')}
                 </Group>
               </Table.Th>
-              <Table.Th onClick={() => handleSort('name')} style={{ cursor: 'pointer' }}>
-                <Group justify="space-between">
-                  Name
+              <Table.Th onClick={() => handleSort('name')} style={{ cursor: 'pointer', padding: '8px' }}>
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">Name</Text>
                   {getSortIcon('name')}
                 </Group>
               </Table.Th>
-              <Table.Th onClick={() => handleSort('status')} style={{ cursor: 'pointer' }}>
-                <Group justify="space-between">
-                  Status
+              <Table.Th onClick={() => handleSort('status')} style={{ cursor: 'pointer', padding: '8px' }}>
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">Status</Text>
                   {getSortIcon('status')}
                 </Group>
               </Table.Th>
-              <Table.Th onClick={() => handleSort('pcap_avail')} style={{ cursor: 'pointer' }}>
-                <Group justify="space-between">
-                  PCAP Available
+              <Table.Th onClick={() => handleSort('pcap_avail')} style={{ cursor: 'pointer', padding: '8px' }}>
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">PCAP Available</Text>
                   {getSortIcon('pcap_avail')}
                 </Group>
               </Table.Th>
-              <Table.Th onClick={() => handleSort('last_update')} style={{ cursor: 'pointer' }}>
-                <Group justify="space-between">
-                  Last Update
+              <Table.Th onClick={() => handleSort('last_update')} style={{ cursor: 'pointer', padding: '8px' }}>
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">Last Update</Text>
                   {getSortIcon('last_update')}
                 </Group>
               </Table.Th>
-              <Table.Th onClick={() => handleSort('usedspace')} style={{ cursor: 'pointer' }}>
-                <Group justify="space-between">
-                  Storage Used
+              <Table.Th onClick={() => handleSort('usedspace')} style={{ cursor: 'pointer', padding: '8px' }}>
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">Storage Used</Text>
                   {getSortIcon('usedspace')}
                 </Group>
               </Table.Th>
-              <Table.Th onClick={() => handleSort('version')} style={{ cursor: 'pointer' }}>
-                <Group justify="space-between">
-                  Version
+              <Table.Th onClick={() => handleSort('version')} style={{ cursor: 'pointer', padding: '8px' }}>
+                <Group justify="space-between" gap="xs">
+                  <Text size="sm">Version</Text>
                   {getSortIcon('version')}
                 </Group>
               </Table.Th>
@@ -437,21 +437,21 @@ export function SensorsPage() {
                 onClick={() => handleSensorClick(sensor.name)}
                 style={{ cursor: 'pointer' }}
               >
-                <Table.Td>{sensor.location || 'N/A'}</Table.Td>
-                <Table.Td>
-                  <Group gap="xs">
-                    <Text>{sensor.name}</Text>
-                    <Text size="xs" c="dimmed">({sensor.fqdn})</Text>
+                <Table.Td style={{ padding: '8px' }}>{sensor.location || 'N/A'}</Table.Td>
+                <Table.Td style={{ padding: '8px' }}>
+                  <Group gap="xs" wrap="nowrap">
+                    <Text size="sm">{sensor.name}</Text>
+                    <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>({sensor.fqdn})</Text>
                   </Group>
                 </Table.Td>
-                <Table.Td>
-                  <Badge color={getStatusColor(sensor.status)}>
+                <Table.Td style={{ padding: '8px' }}>
+                  <Badge size="sm" color={getStatusColor(sensor.status)}>
                     {sensor.status}
                   </Badge>
                 </Table.Td>
-                <Table.Td>{formatPcapAvailable(sensor.pcap_avail)}</Table.Td>
-                <Table.Td>{formatTimeAgo(sensor.last_update)}</Table.Td>
-                <Table.Td>
+                <Table.Td style={{ padding: '8px' }}><Text size="sm">{formatPcapAvailable(sensor.pcap_avail)}</Text></Table.Td>
+                <Table.Td style={{ padding: '8px' }}><Text size="sm">{formatTimeAgo(sensor.last_update)}</Text></Table.Td>
+                <Table.Td style={{ padding: '8px' }}>
                   <Tooltip
                     label={`${sensor.usedspace} of ${sensor.totalspace}`}
                     position="top"
@@ -460,9 +460,9 @@ export function SensorsPage() {
                       <Box
                         style={{
                           width: '100px',
-                          height: '16px',
+                          height: '12px',
                           backgroundColor: 'var(--mantine-color-gray-6)',
-                          borderRadius: '6px',
+                          borderRadius: '4px',
                           overflow: 'hidden'
                         }}
                       >
@@ -478,7 +478,7 @@ export function SensorsPage() {
                     </Box>
                   </Tooltip>
                 </Table.Td>
-                <Table.Td>{sensor.version || 'N/A'}</Table.Td>
+                <Table.Td style={{ padding: '8px' }}><Text size="sm">{sensor.version || 'N/A'}</Text></Table.Td>
               </Table.Tr>
             ))}
           </Table.Tbody>

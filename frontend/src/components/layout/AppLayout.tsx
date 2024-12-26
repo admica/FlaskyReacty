@@ -23,6 +23,7 @@ import {
   IconLogout,
   IconSettings,
   IconHeartRateMonitor,
+  IconUsers,
 } from '@tabler/icons-react';
 import { useState, useEffect } from 'react';
 import apiService from '../../services/api';
@@ -81,6 +82,7 @@ const navItems = [
   { icon: IconNetwork, label: 'Network', path: '/network' },
   { icon: IconHeartRateMonitor, label: 'Health', path: '/health' },
   { icon: IconSettings, label: 'Preferences', path: '/preferences' },
+  { icon: IconUsers, label: 'Users', path: '/users', adminOnly: true },
   { icon: IconShieldLock, label: 'Admin', path: '/admin', adminOnly: true },
 ];
 

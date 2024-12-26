@@ -1,6 +1,6 @@
 // PATH: src/App.tsx
 
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
 import { AppLayout } from '@/components/layout/AppLayout';
 import LoginPage from '@/components/auth/LoginPage';
@@ -9,6 +9,7 @@ import { SensorsPage } from '@/components/sensors/SensorsPage';
 import { JobsPage } from '@/components/jobs/JobsPage';
 import { JobAnalysis } from '@/components/jobs/JobAnalysis';
 import { AdminPage } from '@/components/admin/AdminPage';
+import { UsersPage } from '@/components/admin/UsersPage';
 import { NetworkPage } from '@/components/network/NetworkPage';
 import { PreferencesPage } from '@/components/preferences/PreferencesPage';
 import { HealthSummaryPage } from '@/components/health/HealthSummaryPage';
@@ -68,6 +69,14 @@ function App() {
           }
         />
         <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <UsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/preferences"
           element={
             <ProtectedRoute>
@@ -91,9 +100,18 @@ function App() {
 // Protected route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
+  const isAdmin = localStorage.getItem('isAdmin') === 'true';
+  const location = useLocation();
+
   if (!token) {
     return <Navigate to="/login" replace />;
   }
+
+  // Protect admin-only routes
+  if ((location.pathname === '/admin' || location.pathname === '/users') && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <AppLayout>{children}</AppLayout>;
 };
 

@@ -521,3 +521,54 @@ def get_admin_audit_log():
     except Exception as e:
         logger.error(f"Error getting admin audit log: {e}")
         return jsonify({"error": "Failed to get admin audit log"}), 500
+
+@admin_bp.route('/api/v1/admin/active-users', methods=['GET'])
+@admin_required()
+@rate_limit()
+def get_active_users():
+    """Get list of currently active users with their session information"""
+    try:
+        # Get active sessions with role information
+        rows = db("""
+            SELECT 
+                s.username,
+                s.created_at as session_start,
+                s.expires_at
+            FROM user_sessions s
+            WHERE s.expires_at > NOW()
+            ORDER BY s.created_at DESC
+        """)
+
+        # Get local admin users from config
+        local_admins = set()
+        local_users = config.items('LOCAL_USERS')
+        for _, user_json in local_users:
+            try:
+                user_data = json.loads(user_json)
+                if user_data.get('role') == 'admin':
+                    local_admins.add(user_data.get('username'))
+            except json.JSONDecodeError:
+                continue
+
+        # Get LDAP admin users from database
+        db_admins = set()
+        admin_rows = db("SELECT username FROM admin_users")
+        if admin_rows:
+            db_admins = {row[0] for row in admin_rows}
+
+        # Combine results
+        active_users = [{
+            'username': row[0],
+            'session_start': row[1].isoformat() if row[1] else None,
+            'session_expires': row[2].isoformat() if row[2] else None,
+            'role': 'admin' if row[0] in local_admins or row[0] in db_admins else 'user'
+        } for row in rows]
+
+        return jsonify({
+            'active_users': active_users,
+            'total': len(active_users)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting active users: {e}")
+        return jsonify({"error": "Failed to get active users"}), 500
