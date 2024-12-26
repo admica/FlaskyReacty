@@ -39,6 +39,9 @@ class ProcessingSummary:
         self.dst_subnets = 0
         self.unique_subnets = set()
         self.connection_errors = 0
+        self.stats_parse_errors = 0
+        self.subnet_parse_errors = 0
+        self.db_errors = 0
         self.sensor_times = []
         self.error_details = []
         self.devices = {}  # Track device stats for calculating averages
@@ -105,7 +108,7 @@ class ProcessingSummary:
             logger.error(f"Error saving health summary: {e}")
             raise
 
-def get_summary_record(self):
+    def get_summary_record(self):
         """Generate the database record for this monitoring run."""
         end_time = datetime.now(timezone.utc)
         if end_time <= self.start_time:
