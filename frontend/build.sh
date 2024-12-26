@@ -1,4 +1,5 @@
 #!/bin/bash
+# PATH: build.sh
 
 # Default to prod if no argument provided
 MODE=${1:-prod}

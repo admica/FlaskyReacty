@@ -1,5 +1,4 @@
 // PATH: src/main.tsx
-
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { MantineProvider, createTheme, MantineTheme, MantineColorScheme } from '@mantine/core'

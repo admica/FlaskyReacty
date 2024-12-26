@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, Title, Text, Badge, Group, Stack, Card, Loader, Select, RingProgress, Tooltip, Paper, Grid, Table, Progress, ActionIcon, ScrollArea } from '@mantine/core';
-import { DateTimePicker } from '@mantine/dates';
+import { Box, Title, Text, Badge, Group, Stack, Card, Loader, Select, RingProgress, Paper, Grid, Table, ActionIcon, ScrollArea } from '@mantine/core';
 import apiService from '../../services/api';
 import type { HealthSummary } from '../../services/api';
 
@@ -84,21 +83,10 @@ export function HealthSummaryPage() {
     };
   }, [refreshInterval]);
 
-  const getStatusColor = (status: 'online' | 'offline' | 'degraded') => {
-    switch (status) {
-      case 'online':
-        return 'green';
-      case 'offline':
-        return 'red';
-      case 'degraded':
-        return 'yellow';
-    }
-  };
-
   if (loading && !summaries.length) {
     return (
       <Box p="md">
-        <Group position="center">
+        <Group justify="center">
           <Loader />
           <Text>Loading health summary data...</Text>
         </Group>
@@ -157,16 +145,11 @@ export function HealthSummaryPage() {
     aggregatedData.performance.avg_processing_time /= aggregatedData.count;
   }
 
-  const timeRange = summaries.length > 0 ? {
-    start: new Date(summaries[summaries.length - 1].timestamp),
-    end: new Date(summaries[0].timestamp),
-  } : null;
-
   return (
     <>
       <Box p="md">
         <Stack spacing="md">
-          <Group position="apart">
+          <Group justify="space-between">
             <Title order={2}>Sensor Health Summary</Title>
             <Box>
               <Text size="sm" mb={3}>Auto-refresh</Text>
@@ -207,7 +190,7 @@ export function HealthSummaryPage() {
               <Card withBorder>
                 <Stack>
                   <Title order={3}>Sensors Status</Title>
-                  <Group position="apart" align="flex-start">
+                  <Group justify="space-between" align="flex-start">
                     <Stack spacing="xs">
                       <Group spacing="xs" noWrap>
                         <Text size="sm" w={70}>Online</Text>
@@ -247,7 +230,7 @@ export function HealthSummaryPage() {
               <Card withBorder>
                 <Stack>
                   <Title order={3}>Devices Status</Title>
-                  <Group position="apart" align="flex-start">
+                  <Group justify="space-between" align="flex-start">
                     <Stack spacing="xs">
                       <Group spacing="xs" noWrap>
                         <Text size="sm" w={70}>Online</Text>
@@ -304,7 +287,6 @@ export function HealthSummaryPage() {
                           .sort(([locA], [locB]) => locA.localeCompare(locB))
                           .map(([location, stats]: [string, any]) => {
                         const totalSensors = (stats.sensors_online || 0) + (stats.sensors_offline || 0);
-                        const totalDevices = (stats.devices_online || 0) + (stats.devices_offline || 0);
                         
                         let healthScore = 0;
                         if (totalSensors > 0) {

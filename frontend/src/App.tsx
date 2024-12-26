@@ -1,5 +1,4 @@
 // PATH: src/App.tsx
-
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
 import { AppLayout } from '@/components/layout/AppLayout';

@@ -1,5 +1,4 @@
 // PATH: src/components/network/NetworkPage.tsx
-
 import { Box } from '@mantine/core';
 import { Tabs } from '@mantine/core';
 import { NetworkGlobe } from './NetworkGlobe';

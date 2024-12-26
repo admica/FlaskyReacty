@@ -1,5 +1,4 @@
 // PATH: src/components/jobs/JobsPage.tsx
-
 import { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -120,11 +119,14 @@ export function JobsPage() {
 
   const handleCancelJob = async (jobId: number) => {
     modals.openConfirmModal({
-      title: <Title order={3}>Cancel Job</Title>,
+      title: 'Cancel Job',
       children: (
-        <Text size="sm">
-          Are you sure you want to cancel this job? This will stop all running tasks.
-        </Text>
+        <>
+          <Title order={4} mb="sm">Confirm Cancellation</Title>
+          <Text size="sm">
+            Are you sure you want to cancel this job? This will stop all running tasks.
+          </Text>
+        </>
       ),
       labels: { confirm: 'Cancel Job', cancel: 'Keep Running' },
       confirmProps: { color: 'red' },
@@ -141,11 +143,14 @@ export function JobsPage() {
 
   const handleDeleteJob = async (jobId: number) => {
     modals.openConfirmModal({
-      title: <Title order={3}>Delete Job</Title>,
+      title: 'Delete Job',
       children: (
-        <Text size="sm">
-          Are you sure you want to delete this job? This action cannot be undone.
-        </Text>
+        <>
+          <Title order={4} mb="sm">Confirm Deletion</Title>
+          <Text size="sm">
+            Are you sure you want to delete this job? This action cannot be undone.
+          </Text>
+        </>
       ),
       labels: { confirm: 'Delete Job', cancel: 'Cancel' },
       confirmProps: { color: 'red' },
@@ -177,7 +182,26 @@ export function JobsPage() {
 
   const formatDateTime = (date: string | null) => {
     if (!date) return '-';
-    return new Date(date).toLocaleString();
+    const d = new Date(date);
+    return (
+      <Stack gap={2} align="center">
+        <Text size="sm">
+          {d.toLocaleDateString(undefined, {
+            month: 'numeric',
+            day: 'numeric',
+            year: 'numeric'
+          })}
+        </Text>
+        <Text size="sm" c="dimmed">
+          {d.toLocaleTimeString(undefined, {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+          })}
+        </Text>
+      </Stack>
+    );
   };
 
   const formatSize = (size: string | null) => {

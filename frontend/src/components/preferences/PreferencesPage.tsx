@@ -1,3 +1,4 @@
+// PATH: src/components/preferences/PreferencesPage.tsx
 import { useState, useEffect, useRef } from 'react';
 import {
   Paper,

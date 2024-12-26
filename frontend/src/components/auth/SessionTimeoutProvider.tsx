@@ -1,5 +1,4 @@
 // PATH: src/components/auth/SessionTimeoutProvider.tsx
-
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal, Button, Progress, Text, Group } from '@mantine/core';
@@ -22,7 +21,6 @@ export const useSession = () => {
 // Constants for timing (in milliseconds)
 const INITIAL_DELAY = 13 * 60 * 1000 + 58 * 1000; // 13 minutes and 58 seconds
 const WARNING_TIME = 60 * 1000;                   // 1 minute countdown
-const TOKEN_EXPIRES = 15 * 60 * 1000;             // 15 minute total lifetime
 
 // Debug logging function
 const debug = (message: string, data?: any) => {
@@ -150,7 +148,7 @@ export function SessionTimeoutProvider({ children }: { children: React.ReactNode
                         mb="md"
                         color="blue"
                     />
-                    <Group position="right" mt="md">
+                    <Group justify="flex-end" mt="md">
                         <Button 
                             variant="outline" 
                             color="red" 

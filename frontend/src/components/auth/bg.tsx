@@ -1,5 +1,4 @@
 // PATH: src/components/auth/bg.tsx
-
 import { useEffect, useRef, useState } from 'react';
 import Globe from 'react-globe.gl';
 

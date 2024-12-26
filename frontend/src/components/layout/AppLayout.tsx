@@ -1,5 +1,4 @@
 // PATH: src/components/layout/AppLayout.tsx
-
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   AppShell,

@@ -1,5 +1,4 @@
 // PATH: src/components/sensors/SensorsPage.tsx
-
 import { useState, useEffect } from 'react';
 import { Box, Table, Title, Text, Badge, Group, Stack, Card, MultiSelect, Loader, Modal, Select, RingProgress, Tooltip, Paper, ScrollArea, ActionIcon } from '@mantine/core';
 import { IconChevronUp, IconChevronDown, IconSelector } from '@tabler/icons-react';
