@@ -40,7 +40,7 @@ export function LoginPage() {
 
         try {
             const response = await apiService.login(username, password);
-            localStorage.setItem('token', response.access_token);
+            localStorage.setItem('access_token', response.access_token);
             localStorage.setItem('username', username);
             localStorage.setItem('isAdmin', (response.role === 'admin').toString());
             navigate('/dashboard');

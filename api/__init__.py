@@ -4,6 +4,7 @@ PCAP Server API Blueprints
 from flask import Flask
 from flask_jwt_extended import JWTManager
 from flask_socketio import SocketIO
+from flask_cors import CORS
 from core import config, logger
 
 from api.auth import auth_bp, check_if_token_revoked
@@ -19,6 +20,14 @@ from api.maintenance import start_maintenance_thread
 def create_app():
     """Create and configure the Flask application"""
     app = Flask(__name__)
+
+    # Configure CORS - allow configured origins or all if not specified
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": config.get('APP', 'allowed_origins', fallback='*'),
+            "supports_credentials": True
+        }
+    })
 
     # Configure JWT
     app.config['JWT_SECRET_KEY'] = config.get('JWT', 'secret_key')

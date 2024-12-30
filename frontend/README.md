@@ -15,7 +15,7 @@ When developing locally with self-signed certificates, you'll need to:
 2. Then access the frontend:
    ```bash
    # Visit the frontend URL and accept the certificate
-   https://localhost:5000
+   https://localhost:5173
    ```
    - Click "Advanced"
    - Click "Proceed to localhost (unsafe)"
@@ -36,15 +36,6 @@ npm run build
 
 # Preview production build
 npm run preview
-```
-
-## Environment Variables
-
-Create a `.env` file in the frontend directory:
-
-```env
-# Backend API URL
-VITE_API_URL=https://localhost:3000
 ```
 
 ## Project Structure

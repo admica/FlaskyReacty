@@ -17,7 +17,7 @@ const debug = (message: string, data?: any) => {
 // Base axios instance creator for internal use
 export const createAxiosInstance = (options = {}): AxiosInstance => {
   const instance = axios.create({
-    baseURL: (import.meta.env.VITE_API_URL || 'https://localhost:3000') + '/api/v1',
+    baseURL: '/api/v1',
     headers: {
       'Content-Type': 'application/json',
     },
